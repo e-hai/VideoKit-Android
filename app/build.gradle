@@ -54,6 +54,7 @@ dependencies {
     implementation libs.androidx.viewpager2
     implementation libs.androidx.paging.runtime.ktx
     implementation libs.coil
+    implementation libs.coil.compose
     implementation libs.coil.video
     implementation project(":video")
 
