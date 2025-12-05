@@ -4,20 +4,16 @@ package com.kit.video.sample.editor
 
 import android.annotation.SuppressLint
 import android.graphics.Matrix
-import android.graphics.SurfaceTexture
 import android.net.Uri
-import android.util.Log
 import android.view.TextureView
 import android.view.View
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +21,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,12 +30,10 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -51,7 +44,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
@@ -61,37 +53,31 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.PathNode
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
-data class VideoPickerInfo(
+private data class VideoPickerInfo(
     val videoUri: Uri,
     val cropInfo: CropInfo
 )
 
 // 裁剪信息数据类
-data class CropInfo(
+private data class CropInfo(
     val cropRect: Rect,        // 用户选择的裁剪区域（相对于视频原始尺寸的像素坐标）
     val videoSize: IntSize     // 视频原始尺寸（像素）
 )
@@ -118,7 +104,7 @@ fun VideoEditorScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VideoPickerScreen(onClickFullScreen: (verticalPickerInfo: VideoPickerInfo, horizontalPickerInfo: VideoPickerInfo) -> Unit) {
+private fun VideoPickerScreen(onClickFullScreen: (verticalPickerInfo: VideoPickerInfo, horizontalPickerInfo: VideoPickerInfo) -> Unit) {
 
     var verticalVideoUri by remember { mutableStateOf<Uri?>(null) }
     var horizontalVideoUri by remember { mutableStateOf<Uri?>(null) }
@@ -222,7 +208,7 @@ fun VideoPickerScreen(onClickFullScreen: (verticalPickerInfo: VideoPickerInfo, h
 }
 
 @Composable
-fun VerticalCropVideoPlayer(
+private fun VerticalCropVideoPlayer(
     videoUri: Uri,
     onSelectOtherVideo: () -> Unit,
     onClickOpenSheet: () -> Unit,
@@ -268,7 +254,7 @@ fun VerticalCropVideoPlayer(
 }
 
 @Composable
-fun HorizontalCropVideoPlayer(
+private fun HorizontalCropVideoPlayer(
     videoUri: Uri,
     onSelectOtherVideo: () -> Unit,
     onClickOpenSheet: () -> Unit,
@@ -314,7 +300,7 @@ fun HorizontalCropVideoPlayer(
 }
 
 @Composable
-fun RotatedBox(
+private fun RotatedBox(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -349,7 +335,7 @@ fun RotatedBox(
 @SuppressLint("ConfigurationScreenWidthHeight")
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-fun FullScreenPreview(verticalPickerInfo: VideoPickerInfo, horizontalPickerInfo: VideoPickerInfo) {
+private fun FullScreenPreview(verticalPickerInfo: VideoPickerInfo, horizontalPickerInfo: VideoPickerInfo) {
     var isVertical by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
@@ -513,7 +499,7 @@ fun FullScreenPreview(verticalPickerInfo: VideoPickerInfo, horizontalPickerInfo:
  * 横屏/垂屏裁剪预览
  * **/
 @Composable
-fun HorizontalVerticalPreview(
+private fun HorizontalVerticalPreview(
     verticalInfo: VideoPickerInfo,
     horizontalInfo: VideoPickerInfo,
     onDismissRequest: () -> Unit,
@@ -734,7 +720,7 @@ fun HorizontalVerticalPreview(
  * 计算裁剪参数
  * 将用户选择的裁剪区域转换为视频播放器的缩放和平移参数
  */
-fun computeTextureMatrix(
+private fun computeTextureMatrix(
     viewWidth: Float,
     viewHeight: Float,
     cropInfo: CropInfo
@@ -788,7 +774,7 @@ fun computeTextureMatrix(
 
 
 // 裁剪比例模式枚举
-enum class AspectRatioMode(val displayName: String, val ratio: Float?) {
+private enum class AspectRatioMode(val displayName: String, val ratio: Float?) {
     FREE("自由", null),
 
     //    RATIO_3_4("3:4", 3f / 4f),
@@ -807,7 +793,7 @@ enum class AspectRatioMode(val displayName: String, val ratio: Float?) {
  * @param onCropInfoChange 回调函数，当裁剪信息发生变化时调用
  */
 @Composable
-fun CropVideoPlayer(
+private fun CropVideoPlayer(
     videoUri: Uri,
     aspectRatioMode: AspectRatioMode,
     onCropInfoChange: (CropInfo) -> Unit = {},
@@ -903,7 +889,7 @@ private fun calculateCropPreviewRect(
 
 
 // 创建初始裁剪框 - 根据视频实际尺寸和显示区域计算
-fun createInitialCropRect(viewSize: IntSize, videoSize: IntSize, mode: AspectRatioMode): Rect {
+private fun createInitialCropRect(viewSize: IntSize, videoSize: IntSize, mode: AspectRatioMode): Rect {
     // 如果视频尺寸还未获取，使用视图尺寸
     if (videoSize.width == 0 || videoSize.height == 0) {
         val width = viewSize.width * 0.6f
@@ -973,7 +959,7 @@ fun createInitialCropRect(viewSize: IntSize, videoSize: IntSize, mode: AspectRat
 
 
 @Composable
-fun SelectionOverlay(
+private fun SelectionOverlay(
     viewSize: IntSize,
     videoSize: IntSize,
     aspectRatioMode: AspectRatioMode,
@@ -1178,11 +1164,11 @@ fun SelectionOverlay(
     }
 }
 
-enum class ResizeHandle {
+private enum class ResizeHandle {
     TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT
 }
 
-fun getResizeHandle(offset: Offset, rect: Rect): ResizeHandle? {
+private fun getResizeHandle(offset: Offset, rect: Rect): ResizeHandle? {
     val touchRadius = 150f
 
     return when {
@@ -1202,7 +1188,7 @@ fun getResizeHandle(offset: Offset, rect: Rect): ResizeHandle? {
     }
 }
 
-fun resizeCropRect(
+private fun resizeCropRect(
     currentRect: Rect,
     handle: ResizeHandle,
     dragOffset: Offset,
