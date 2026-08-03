@@ -49,16 +49,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kit.video.sample.ui.screens.EditorScreen
+import com.kit.video.sample.ui.screens.ClipScreen
 import com.kit.video.sample.ui.screens.MainHomeScreen
-import com.kit.video.sample.ui.screens.SinglePlayScreen
-import com.kit.video.sample.ui.screens.VideoListScreen
+import com.kit.video.sample.ui.screens.VodScreen
+import com.kit.video.sample.ui.screens.FeedScreen
 
 enum class AppScreen {
     Home,
-    List,
-    Editor,
-    SinglePlay
+    Feed,
+    Clip,
+    Vod
 }
 
 class MainActivity : ComponentActivity() {
@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         // 按 Home 键切桌面时自动切系统级画中画 (PiP Mode)
-        if (activeScreen == AppScreen.SinglePlay && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (activeScreen == AppScreen.Vod && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
                 val paramsBuilder = PictureInPictureParams.Builder()
                     .setAspectRatio(Rational(16, 9))
@@ -253,21 +253,21 @@ fun MainAppRouter(
             Crossfade(targetState = currentScreen, label = "ScreenTransition") { screen ->
                 when (screen) {
                     AppScreen.Home -> MainHomeScreen(
-                        onNavigateToList = { currentScreen = AppScreen.List },
-                        onNavigateToEditor = { currentScreen = AppScreen.Editor },
-                        onNavigateToSinglePlay = { currentScreen = AppScreen.SinglePlay }
+                        onNavigateToFeed = { currentScreen = AppScreen.Feed },
+                        onNavigateToClip = { currentScreen = AppScreen.Clip },
+                        onNavigateToVod = { currentScreen = AppScreen.Vod }
                     )
 
-                    AppScreen.List -> VideoListScreen(
+                    AppScreen.Feed -> FeedScreen(
                         onBackClick = { currentScreen = AppScreen.Home },
-                        onGoSinglePlay = { currentScreen = AppScreen.SinglePlay }
+                        onGoVod = { currentScreen = AppScreen.Vod }
                     )
 
-                    AppScreen.Editor -> EditorScreen(
+                    AppScreen.Clip -> ClipScreen(
                         onBackClick = { currentScreen = AppScreen.Home }
                     )
 
-                    AppScreen.SinglePlay -> SinglePlayScreen(
+                    AppScreen.Vod -> VodScreen(
                         onBackClick = { currentScreen = AppScreen.Home },
                         isInPipMode = isInPipMode,
                         externalIsPlaying = isPlayingState,

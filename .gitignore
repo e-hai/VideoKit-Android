@@ -8,9 +8,21 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
+**/.DS_Store
 /build
+**/build/
 /captures
 .externalNativeBuild
 .cxx
+**/.cxx/
 local.properties
 /.idea/
+.kotlin/
+
+# FFmpeg 源码与中间编译目录（保留 build_ffmpeg.sh + prebuilt/.so）
+video-ffmpeg/src/main/cpp/scripts/ffmpeg-*/
+video-ffmpeg/src/main/cpp/scripts/*.tar.*
+video-ffmpeg/src/main/cpp/scripts/*.tar.bz2
+video-ffmpeg/src/main/cpp/scripts/*.tar.xz
+video-ffmpeg/src/main/cpp/scripts/*.tar.gz
+video-ffmpeg/src/main/cpp/scripts/android/

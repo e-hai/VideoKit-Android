@@ -3,64 +3,85 @@
 [![Android AGP](https://img.shields.io/badge/AGP-9.3.1-brightgreen.svg)](https://developer.android.com/studio/releases/gradle-plugin)
 [![Gradle](https://img.shields.io/badge/Gradle-9.5.0-blue.svg)](https://gradle.org)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple.svg)](https://kotlinlang.org)
-[![Media3](https://img.shields.io/badge/Media3-1.5.1-red.svg)](https://developer.android.com/guide/topics/media/media3)
+[![Media3](https://img.shields.io/badge/Media3-1.10.1-red.svg)](https://developer.android.com/guide/topics/media/media3)
 [![Compose](https://img.shields.io/badge/Compose-Material3-orange.svg)](https://developer.android.com/jetpack/compose)
 
-**VideoKit** 是一个基于 **Android Jetpack Compose** 与 **AndroidX Media3 (ExoPlayer)** 构建的工业级 Android 音视频 SDK 解决方案全家桶。涵盖**抖音级短视频无缝滑动播放**、**YouTube 级沉浸式长视频播放（含画中画 PiP）**以及**交互式视频裁剪与调参引擎**。
+**VideoKit** 是一个基于 **Android Jetpack Compose** 与 **AndroidX Media3 (ExoPlayer)** 构建的工业级 Android 音视频 SDK。涵盖 **竖滑 Feed**、**沉浸点播 VOD（含 PiP）**、**剪辑调参 Clip**，以及按需加载的 FFmpeg NDK 软解扩展（`:video-ffmpeg`）。
 
 ---
 
 ## 📐 架构与设计图示 (Architecture Diagrams)
 
-### 1. 系统模块架构图 (System Architecture)
+### 1. 独立模块系统架构图 (System Architecture)
 
 ```mermaid
 graph TD
-    App[sample App - Single Activity / Compose Router] --> ShortModule[shortvideo 短视频 SDK]
-    App --> LongModule[longvideo 长视频 SDK]
-    App --> EditorModule[editor 视频编辑 SDK]
+    App[sample App - Single Activity / Compose Router] --> CoreVideo[video 核心 SDK - Feed / VOD / Clip]
+    App -. 按需引入 .-> FFmpegModule[video-ffmpeg 独立软解模块]
 
-    subgraph shortvideo 核心能力
-        ShortModule --> ExoCoverPlayerView[ExoCoverPlayerView 封面首帧无缝控件]
-        ShortModule --> PreloadQueue[Preload Queue 后台 2MB 静默预加载]
-        ShortModule --> BreathingView[GPU 硬件加速底部呼吸灯动效]
+    subgraph video 核心能力
+        CoreVideo --> Feed[feed · FeedCoverPlayerView + Preload]
+        CoreVideo --> Vod[vod · VodPlayer / Overlay / 手势]
+        CoreVideo --> Clip[clip · ClipEngine]
     end
 
-    subgraph longvideo 核心能力
-        LongModule --> LongVideoPlayerView[LongVideoPlayerView 纯净手势 Player]
-        LongModule --> GestureController[左亮右音手势 + 双击 ±10s Seek]
-        LongModule --> PipManager[Android 系统级画中画 PiP + RemoteActions]
-        LongModule --> PremiumSlider[PremiumBufferSlider 双色缓冲 + 时间气泡]
-    end
-
-    subgraph editor 核心能力
-        EditorModule --> VideoEditorEngine[VideoEditorEngine 裁剪/滤镜/调参引擎]
-        EditorModule --> TimelineTrack[TimelineTrackVisualizer 胶卷波形轨]
+    subgraph video-ffmpeg 自研软解
+        FFmpegModule --> Factory[FfmpegRenderersFactory]
+        Factory --> VRen[FfmpegVideoRenderer]
+        Factory --> ARen[FfmpegAudioRenderer]
+        VRen --> JNI[libffmpeg_jni.so JNI]
+        ARen --> JNI
+        JNI --> SO[一套 prebuilt libavcodec / avutil / swresample / swscale]
     end
 ```
 
-### 2. 短视频滑动预加载与状态流转图 (Short Video Flow)
+### 2. Media3 / FFmpeg / JNI 职责划分
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as 用户
-    participant Pager as Compose VerticalPager
-    participant Manager as ExoShortVideoManager
-    participant Cache as SimpleCache (512MB LRU)
-    participant Player as ExoPlayer Engine
+本项目采用 **分轨软解**，不是“整文件交给 FFmpeg 一体播放”。
 
-    User->>Pager: 向上滑动到卡片 Page N
-    Pager->>Manager: 触发 settledPage (isScrollInProgress = false)
-    alt 缓存已命中有数据
-        Cache-->>Player: 读取前 2MB 预加载磁盘数据
-        Player->>User: 0ms 瞬间渲染首帧秒播 (Fadeout Cover)
-    else 线上拉取网络流
-        Manager->>User: 呈现封面 Cover (200ms 防抖中心 Loading)
-        Player-->>User: onRenderedFirstFrame 首帧就绪，淡出 Cover
-    end
-    Manager->>Cache: 🚀 后台静默发起 Page N+1 预加载 (Preload Queue)
+```text
+URL / 文件
+    │
+    ▼
+┌──────────────────────────────────────────────────────────┐
+│ Media3 ExoPlayer（播放引擎）                                │
+│  · 解复用（Extractor / MediaSource）                        │
+│  · 轨选择、缓冲、seek、倍速、A/V 同步时钟                      │
+│  · 生命周期、错误回调                                        │
+│  · 默认解码：MediaCodecVideoRenderer / MediaCodecAudioRenderer│
+└───────────────┬──────────────────────────┬───────────────┘
+                │ 视频轨（可选替换）            │ 音频轨（可选替换）
+                ▼                            ▼
+┌──────────────────────────┐   ┌──────────────────────────┐
+│ FfmpegVideoRenderer      │   │ FfmpegAudioRenderer      │
+│ （Kotlin，Media3 扩展点）  │   │ （Kotlin，Media3 扩展点）  │
+│ DecoderVideoRenderer 契约 │   │ DecoderAudioRenderer 契约 │
+└────────────┬─────────────┘   └────────────┬─────────────┘
+             │                              │
+             ▼                              ▼
+┌──────────────────────────────────────────────────────────┐
+│ JNI：libffmpeg_jni.so                                 │
+│  · 把 Java/Kotlin ByteBuffer、Surface 转成 C 可操作内存     │
+│  · 调用 FFmpeg C API（avcodec_send/receive、sws、swr…）     │
+│  · 视频：YUV → VideoDecoderOutputBuffer / Surface           │
+│  · 音频：PCM → SimpleDecoderOutputBuffer → AudioSink        │
+└────────────┬─────────────────────────────────────────────┘
+             ▼
+┌──────────────────────────────────────────────────────────┐
+│ FFmpeg 运行时（一套 so，build_ffmpeg.sh 编译）               │
+│  libavcodec / libavutil / libswscale / libswresample …     │
+│  · 真正的压缩码流解码算法                                    │
+└──────────────────────────────────────────────────────────┘
 ```
+
+| 层级 | 职责 | 不负责 |
+|------|------|--------|
+| **Media3** | 解复用、同步、缓冲、选轨、把 sample 送给 Renderer、PCM 上 AudioTrack、Surface 时序 | 具体压缩算法实现 |
+| **Renderer（Kotlin）** | 实现 Media3 扩展接口；声明支持的 mime；管理 Decoder 生命周期 | 直接操作 FFmpeg C 结构体 |
+| **JNI（`.so`）** | Java ↔ C 桥接；线程/缓冲安全；调用 FFmpeg；像素/PCM 回填 | 播放列表、UI、A/V 同步策略 |
+| **FFmpeg（`libav*`）** | H.264/HEVC/AV1/AAC… 解码与格式转换 | Android 播放器框架 |
+
+一句话：**Media3 管“怎么播”，FFmpeg 管“怎么解”，JNI 是两者之间的桥。**
 
 ---
 
@@ -68,27 +89,26 @@ sequenceDiagram
 
 | 业务板块 | 核心特性 | 技术亮点 |
 | :--- | :--- | :--- |
-| **短视频 (`shortvideo`)** | 抖音级 0 延迟滑动播放 | 200ms 防抖起播、GPU 硬件加速底部发光呼吸灯、`settledPage` 沉降起播、512MB LRU 后台 **Preload Queue 预加载** |
-| **长视频 (`longvideo`)** | YouTube 级沉浸式全能播放器 | **系统级画中画 (PiP Mode)** 带【▶/❚❚】RemoteActions 控件、左亮右音手势、双击 ±10s 微调、0.5x~2.0x 倍速、**按压加粗 2.5dp $\rightarrow$ 6dp 双色缓冲进度条与 [01:45] 随动时间气泡** |
-| **视频编辑 (`editor`)** | 交互式裁剪与调参引擎 | **Compose Canvas 胶卷波形轨** (`TimelineTrackVisualizer`)、多款滤镜切换、亮度/对比度/饱和度实时仪表板与导出参数封装 (`VideoEditParams`) |
-| **全局稳定防护** | 崩溃与网络容错防护 | 解决 `ExoTimeoutException` 生命安全拦截、`configChanges` 防旋转销毁、**全局断网警示与联网无缝自动恢复 (`Network Recovery`)** |
+| **竖滑 Feed (`feed`)** | 信息流滑动秒播 | Cover / 200ms 防抖起播、底部呼吸灯、`settledPage` 沉降起播、Preload Queue |
+| **沉浸点播 VOD (`vod`)** | 单路沉浸播放 | PiP、手势亮/音、倍速、`VodPlayer` Overlay、双色进度条 |
+| **剪辑 Clip (`clip`)** | 裁剪与调参 | `ClipEngine` / `ClipParams` |
+| **FFmpeg (`video-ffmpeg`)** | 自研音视频软解 | **同一套 so** + `FfmpegVideoRenderer` / `FfmpegAudioRenderer`，硬解优先可降级 |
+| **稳定防护** | 生命周期与网络 | `ExoTimeoutException` 防护、断网恢复 |
 
 ---
 
 ## 🚀 快速开始与使用指南 (Usage Guide)
 
-### 1. 接入短视频滑动播放器 (`ExoCoverPlayerView`)
+### 1. 接入竖滑 Feed (`FeedCoverPlayerView`)
 
 ```kotlin
 @Composable
-fun ShortVideoPage(videoUrl: String, exoManager: ExoShortVideoManager) {
+fun FeedPage(videoUrl: String, feedManager: FeedPlayerManager) {
     AndroidView(
         factory = { context ->
-            ExoCoverPlayerView(context).also { coverView ->
-                // 在滑动沉降后触发播放
-                exoManager.playVideoFromCoverView(coverView, videoUrl)
-                // 静默预加载下一个视频
-                exoManager.preloadNextVideo(nextVideoUrl)
+            FeedCoverPlayerView(context).also { coverView ->
+                feedManager.playVideoFromCoverView(coverView, videoUrl)
+                feedManager.preloadNextVideo(nextVideoUrl)
             }
         },
         modifier = Modifier.fillMaxSize()
@@ -96,42 +116,89 @@ fun ShortVideoPage(videoUrl: String, exoManager: ExoShortVideoManager) {
 }
 ```
 
-### 2. 接入长视频播放器与手势交互 (`LongVideoPlayerView`)
+### 2. 接入沉浸点播 VOD（Compose）
 
 ```kotlin
-@Composable
-fun LongVideoPage(videoUrl: String, lifecycleOwner: LifecycleOwner) {
-    AndroidView(
-        factory = { context ->
-            LongVideoPlayerView(context).apply {
-                bindLifecycle(lifecycleOwner)
-                playUrl(videoUrl)
-                setSpeed(1.25f) // 1.25 倍速
-            }
-        },
-        modifier = Modifier.fillMaxSize()
-    )
-}
-```
-
-### 3. 接入精细化双色缓冲进度条 (`PremiumBufferSlider`)
-
-```kotlin
-PremiumBufferSlider(
-    currentPositionMs = currentPositionMs,
-    bufferedPositionMs = bufferedPositionMs,
-    durationMs = durationMs,
-    onSeekTo = { targetMs -> playerViewInstance?.seekTo(targetMs) },
-    onDraggingStateChanged = { dragging -> isDragging = dragging }
+VodPlayer(
+    url = videoUrl,
+    title = "Demo",
+    renderersFactory = FfmpegRenderersFactory(context),
+    onBackClick = onBack
 )
 ```
 
+### 3. 启用自研 FFmpeg 音视频软解（方案 B）
+
+```kotlin
+// 同一 Factory：视频 + 音频均为本模块自研 Renderer，共用 libffmpeg_jni.so
+// 策略：MediaCodec 硬解优先，FFmpeg 挂在 Renderer 列表末尾作兜底
+val renderersFactory = FfmpegRenderersFactory(context)
+val player = ExoPlayer.Builder(context, renderersFactory).build()
+```
+
+| 轨道 | Renderer | Native |
+|------|----------|--------|
+| Video | `com.kit.video.ffmpeg.FfmpegVideoRenderer` | `ffmpeg_video_jni.cpp` |
+| Audio | `com.kit.video.ffmpeg.FfmpegAudioRenderer` | `ffmpeg_audio_jni.cpp` |
+| FFmpeg 本体 | — | `prebuilt/*/libav*.so`（只一套） |
+| 解复用 / 同步 | ExoPlayer | Media3 |
+
+**不依赖** 官方 `media3-decoder-ffmpeg` 模块，避免第二套 FFmpeg。
+
+APK native 布局：
+
+```text
+lib/arm64-v8a/
+  libavcodec.so libavutil.so libswresample.so libswscale.so libavformat.so
+  libffmpeg_jni.so          ← 视频 JNI + 音频 JNI 打在同一库
+```
+
+需要更多音频格式时，在 `build_ffmpeg.sh` 的 `FFMPEG_CONFIG_FLAGS` 数组中取消注释对应 `--enable-decoder=`（如 `ac3` / `eac3` / `dca`），重新编译 prebuilt。注意 DTS 在 FFmpeg 中的名字是 **`dca`**，不是 `dts`。
+
 ---
 
-## 🛠️ 编译与构建说明 (Build & Verify)
+## 🛠️ FFmpeg NDK 编译脚本配置指南 (build_ffmpeg.sh)
+
+权威开关列表在脚本内数组 [`build_ffmpeg.sh`](video-ffmpeg/src/main/cpp/scripts/build_ffmpeg.sh) → `FFMPEG_CONFIG_FLAGS`。  
+使用 **`--disable-everything` + 按行 enable**：行首加/去 `#` 才真正关闭/打开对应功能（旧版写在 `configure \` 续行里的 `#` 会被 bash 打断，已废弃）。
+
+### 1. 运行编译脚本
 
 ```bash
-# 全量 Android Debug 构建
+cd video-ffmpeg/src/main/cpp/scripts
+export ANDROID_NDK_HOME=/Users/your_name/Library/Android/sdk/ndk/25.2.9519653
+chmod +x build_ffmpeg.sh
+./build_ffmpeg.sh
+```
+
+### 2. 配置分类与开关方式
+
+| 分类 | 默认 | 作用 |
+|------|------|------|
+| 核心库 | avutil/avcodec/avformat/swscale/swresample | JNI 软解与像素/PCM 转换 |
+| 视频 decoder | h264/hevc/vp9/av1 | 画面软解；另有 vp8/mpeg4/rv40… 注释可选 |
+| 音频 decoder | aac/mp3 | 音轨软解；另有 ac3/eac3/**dca**/opus/flac… 与 `FfmpegLibrary` 对齐 |
+| parser | 与默认 decoder 配套 | 帧边界 / seek 辅助 |
+| demuxer | mov/matroska/flv | 容器拆轨（播放主路径仍是 Media3 Extractor） |
+| bsf / muxer / encoder / network / mediacodec | 默认注释 | 导出、FFmpeg 自拉流、硬解加速等按需开 |
+| 合规 | `--disable-gpl --enable-version3` | LGPL 分发；勿开 GPL/`nonfree` 除非清楚后果 |
+
+示例（在脚本数组中改，不要再抄到 `configure \` 续行里）：
+
+```bash
+--enable-decoder=h264                 # H.264/AVC：MP4、HLS
+# --enable-decoder=ac3                # Dolby AC-3：取消行首 # 即编入
+# --enable-decoder=dca                # DTS（FFmpeg 名 dca）
+```
+
+改完后重新跑脚本，再 `./gradlew :video-ffmpeg:assembleDebug`。
+
+---
+
+## 🛠️ 项目构建说明 (Build & Verify)
+
+```bash
+# 全量 Android Debug 构建 (编译 sample, video, video-ffmpeg 全部多模块)
 ./gradlew assembleDebug
 
 # 极净清理与全量构建

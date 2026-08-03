@@ -40,9 +40,9 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun MainHomeScreen(
-    onNavigateToList: () -> Unit,
-    onNavigateToEditor: () -> Unit,
-    onNavigateToSinglePlay: () -> Unit
+    onNavigateToFeed: () -> Unit,
+    onNavigateToClip: () -> Unit,
+    onNavigateToVod: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -70,31 +70,31 @@ fun MainHomeScreen(
             )
 
             MenuCard(
-                title = "视频列表 (VerticalPager)",
-                description = "短视频无限滑动卡片与单 ExoPlayer 实例全屏复用",
+                title = "竖滑 Feed",
+                description = "信息流 VerticalPager · Cover 起播 · Preload 预加载",
                 icon = Icons.Default.PlayCircle,
                 gradient = listOf(Color(0xFF6200EE), Color(0xFFBB86FC)),
-                onClick = onNavigateToList
+                onClick = onNavigateToFeed
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             MenuCard(
-                title = "视频剪辑与编辑器 (Editor UI)",
-                description = "纯 Compose 构建的交互式视频剪辑与滤镜调整控制",
+                title = "剪辑 Clip",
+                description = "裁剪区间 · 滤镜 · 亮度/对比度/饱和度调参",
                 icon = Icons.Default.Edit,
                 gradient = listOf(Color(0xFFFF4081), Color(0xFFC2185B)),
-                onClick = onNavigateToEditor
+                onClick = onNavigateToClip
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             MenuCard(
-                title = "单视频基础播放 (Single Play)",
-                description = "Media3 ExoPlayer 基础全屏控制与 Raw 资源播放",
+                title = "沉浸点播 VOD",
+                description = "单路 Overlay · 手势亮/音 · 倍速 · 系统 PiP",
                 icon = Icons.Default.SlowMotionVideo,
                 gradient = listOf(Color(0xFFFF9800), Color(0xFFFFC107)),
-                onClick = onNavigateToSinglePlay
+                onClick = onNavigateToVod
             )
         }
     }

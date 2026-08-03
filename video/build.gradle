@@ -71,6 +71,7 @@ dependencies {
     implementation libs.androidx.compose.material3
     implementation libs.androidx.compose.material3.icons.core
     implementation libs.androidx.compose.material3.icons.extended
+    implementation libs.androidx.compose.lifecycle
     debugImplementation libs.androidx.compose.ui.tooling
     debugImplementation libs.androidx.compose.ui.test.manifest
 }

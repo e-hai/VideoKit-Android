@@ -6,16 +6,17 @@
 
 ## 1. 模块化架构划分 (Module Architecture)
 
-系统被划分为一个宿主 App 模块和三大独立音视频功能业务库：
+系统被划分为宿主 App 模块、视频核心库和 FFmpeg NDK 软解扩展模块：
 
 ```
 VideoKit/
 ├── sample/                # Single-Activity (MainActivity) + Compose 多路由 App 示例模块
-└── video/                 # VideoKit Core SDK 核心库
-    └── com.kit.video/
-        ├── shortvideo/    # 抖音级短视频滑动播放器模块 (Cover/Preload/Breathing Line/Pager Settlement)
-        ├── longvideo/     # YouTube 级长视频播放器模块 (Overlay/Gestures/Speed/PiP/Premium Slider)
-        └── editor/        # 视频编辑与裁剪/滤镜/调参引擎 (VideoEditorEngine/Timeline Track)
+├── video/                 # VideoKit Core SDK 核心库
+│   └── com.kit.video/
+│       ├── feed/          # 竖滑信息流 Feed（Cover / Preload / Breathing Line / Pager Settlement）
+│       ├── vod/           # 沉浸点播 VOD（Overlay / Gestures / Speed / PiP）
+│       └── clip/          # 剪辑调参 Clip（ClipEngine / Timeline）
+└── video-ffmpeg/          # 【独立软解扩展库】FFmpeg C/C++ NDK JNI + 软件视频/音频解码渲染器 (FfmpegVideoRenderer)
 ```
 
 ---
@@ -28,7 +29,7 @@ VideoKit/
   - 在 `ON_PAUSE` / `ON_STOP` 时，仅触发 `player.pause()`。
   - 仅在 `ON_DESTROY` 时调用 `player.release()`，并使用 `try-catch` 包裹。
 
-### 2.2 抖音级短视频滑动极速起播 (Short Video Smooth Swiping)
+### 2.2 竖滑 Feed 极速起播 (Feed Smooth Swiping)
 - **Pager 状态与起播解耦**：切勿在 Compose `VerticalPager` 滑动过程中 (`isScrollInProgress == true`) 触发 `setMediaSource` 或 `prepare()`，否则将导致严重掉帧。
 - **settledPage 防抖**：必须在 `LaunchedEffect(pagerState.settledPage, pagerState.isScrollInProgress)` 中校验 `!isScrollInProgress` 且 `settledPage != lastPlayedPage` 时才发起起播。
 - **两阶段加载视觉**：
@@ -36,23 +37,29 @@ VideoKit/
   - **播放中二次缓冲**：隐藏居中圈，启动底部 GPU 硬件加速发光呼吸灯 (`bottomBreathingView`)，保持视频画面中央 0 遮挡。
 - **Preload Queue 预加载队列**：在起播当前 `page` 时，后台异步线程使用 `CacheWriter` 提前将下一个视频 `page + 1` 的前 2MB 数据下载至 512MB LRU 磁盘缓存 (`SimpleCache`)，实现切页 0ms 闪电秒播。
 
-### 2.3 YouTube 级长视频与系统级画中画 (Long Video & PiP Mode)
+### 2.3 沉浸点播 VOD 与系统级画中画 (VOD & PiP Mode)
 - **画面 0 原生控件干扰**：设置 `useController = false`，完全采用 Compose 自研沉浸 Overlay。
 - **手势控制**：
   - 左屏上下滑动 $\rightarrow$ 动态调节屏幕亮度；
   - 右屏上下滑动 $\rightarrow$ 动态调节系统音量；
   - 双击左右两侧 $\rightarrow$ 快进/快退 10 秒。
 - **系统级画中画 (Picture-in-Picture)**：
-  - 当处于 `AppScreen.SinglePlay` 时按 Home 键切桌面，Activity 触发 `onUserLeaveHint()` 唤起 `enterPictureInPictureMode`；
-  - 必须在 `LongVideoPlayerView` 的 `ON_PAUSE` 中拦截检查 `!activity.isInPictureInPictureMode` 才允许 pause，保证小窗 0 暂停持续播放；
+  - 当处于 `AppScreen.Vod` 时按 Home 键切桌面，Activity 触发 `onUserLeaveHint()` 唤起 `enterPictureInPictureMode`；
+  - 必须在 `VodPlayerView` 的 `ON_PAUSE` 中拦截检查 `!activity.isInPictureInPictureMode` 才允许 pause，保证小窗 0 暂停持续播放；
   - 使用 `RemoteAction` + `PendingIntent` 向系统小窗下发【▶ 播放 / ❚❚ 暂停】控件。
+
+### 2.4 FFmpeg NDK 软解扩展与 6 大注意事项
+- **独立解耦模块 `:video-ffmpeg`**：将 C/C++ NDK、CMake 及 JNI (`libffmpeg_jni.so`，含视频/音频桥接) 独立成模块，按需引入，杜绝核心包体积虚胖；
+- **ANativeWindow 线程安全锁**：JNI 层监听 Surface 生命，防止 Surface 销毁后继续渲染引发崩溃；
+- **LGPL 协议合规**：编译脚本指定 `--disable-gpl --enable-version3`，杜绝商业版权风险；
+- **软硬解无缝降级**：优先使用系统 MediaCodec 硬解，硬解异常时自动降级使用 FFmpeg 软解。
 
 ---
 
 ## 3. 构建与验证指令
 
 ```bash
-# 全量编译构建
+# 全量编译构建 (包含 sample, video, video-ffmpeg 多模块)
 ./gradlew assembleDebug
 
 # 增量清理构建
