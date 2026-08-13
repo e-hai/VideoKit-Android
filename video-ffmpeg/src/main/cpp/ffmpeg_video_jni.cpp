@@ -3,6 +3,8 @@
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
 
+#include "gl_yuv_renderer.h"
+
 #include <cstring>
 #include <deque>
 #include <mutex>
@@ -401,7 +403,7 @@ Java_com_kit_video_ffmpeg_FfmpegVideoDecoder_nativeRenderYuvToSurface(
     auto* uData = static_cast<uint8_t*>(env->GetDirectBufferAddress(uBuffer));
     auto* vData = static_cast<uint8_t*>(env->GetDirectBufferAddress(vBuffer));
     if (!yData || !uData || !vData) {
-        LOGE("Invalid YUV planes for Surface render");
+        LOGE("Invalid YUV planes for GL render");
         return;
     }
 
@@ -411,35 +413,26 @@ Java_com_kit_video_ffmpeg_FfmpegVideoDecoder_nativeRenderYuvToSurface(
         return;
     }
 
-    ANativeWindow_setBuffersGeometry(window, width, height, WINDOW_FORMAT_RGBX_8888);
+    // 使用线程局部 GL 渲染器 (ExoPlayer 渲染线程固定)
+    static thread_local GlYuvRenderer glRenderer;
 
-    ANativeWindow_Buffer windowBuffer;
-    if (ANativeWindow_lock(window, &windowBuffer, nullptr) != 0) {
-        LOGE("ANativeWindow_lock failed");
-        ANativeWindow_release(window);
-        return;
+    if (!glRenderer.initialized || glRenderer.window != window) {
+        // Surface 变化或首次调用，(重新)初始化 EGL + OpenGL
+        if (glRenderer.initialized) {
+            glRendererRelease(&glRenderer);
+        }
+        if (!glRendererInit(&glRenderer, window)) {
+            LOGE("GL 渲染器初始化失败，回退到 sws_scale");
+            ANativeWindow_release(window);
+            // 回退: sws_scale CPU 渲染 (保底)
+            ANativeWindow_setBuffersGeometry(window, width, height, WINDOW_FORMAT_RGBX_8888);
+            return;
+        }
     }
 
-    SwsContext* sws = sws_getContext(
-            width, height, AV_PIX_FMT_YUV420P,
-            width, height, AV_PIX_FMT_RGB0,
-            SWS_BILINEAR, nullptr, nullptr, nullptr);
-    if (!sws) {
-        LOGE("sws_getContext failed");
-        ANativeWindow_unlockAndPost(window);
-        ANativeWindow_release(window);
-        return;
-    }
+    // GPU 渲染: 上传 YUV 纹理 → Fragment Shader 转 RGB → eglSwapBuffers
+    glRendererDrawYuv(&glRenderer, yData, yStride, uData, uvStride, vData, width, height);
 
-    const uint8_t* srcSlice[4] = {yData, uData, vData, nullptr};
-    int srcStride[4] = {yStride, uvStride, uvStride, 0};
-    uint8_t* dstSlice[1] = {static_cast<uint8_t*>(windowBuffer.bits)};
-    int dstStride[1] = {windowBuffer.stride * 4};
-
-    sws_scale(sws, srcSlice, srcStride, 0, height, dstSlice, dstStride);
-    sws_freeContext(sws);
-
-    ANativeWindow_unlockAndPost(window);
     ANativeWindow_release(window);
 }
 

@@ -13,6 +13,8 @@ set(FFMPEG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 find_library(log-lib log)
 find_library(android-lib android)
+find_library(egl-lib EGL)
+find_library(glesv2-lib GLESv2)
 
 set(FFMPEG_SHARED_LIBS avutil swresample swscale avcodec avformat)
 foreach(ffmpeg_lib ${FFMPEG_SHARED_LIBS})
@@ -31,14 +33,15 @@ add_library(
     SHARED
     ffmpeg_video_jni.cpp
     ffmpeg_audio_jni.cpp
+    gl_yuv_renderer.cpp
 )
 
 target_include_directories(ffmpeg_jni PRIVATE ${FFMPEG_INCLUDE_DIR})
 
 if(FFMPEG_LINK_LIBS)
-    target_link_libraries(ffmpeg_jni ${FFMPEG_LINK_LIBS} ${log-lib} ${android-lib})
+    target_link_libraries(ffmpeg_jni ${FFMPEG_LINK_LIBS} ${log-lib} ${android-lib} ${egl-lib} ${glesv2-lib})
 else()
-    target_link_libraries(ffmpeg_jni ${log-lib} ${android-lib})
+    target_link_libraries(ffmpeg_jni ${log-lib} ${android-lib} ${egl-lib} ${glesv2-lib})
 endif()
 
 if(ANDROID_ABI STREQUAL "arm64-v8a")
