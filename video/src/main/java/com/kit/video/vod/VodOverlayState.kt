@@ -18,9 +18,9 @@ data class VodOverlayState(
     val isFullscreen: Boolean = false,
     val isHardwareDecoder: Boolean = true,
     val showDecoderBadge: Boolean = true,
-    // 工业级新增特性
     val isLocked: Boolean = false,
     val isLongPressing2x: Boolean = false,
+    val isEnded: Boolean = false,
     val danmakuEnabled: Boolean = true,
     val subtitleEnabled: Boolean = true,
     val currentQualityName: String = "1080P",

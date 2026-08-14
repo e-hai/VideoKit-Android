@@ -35,13 +35,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ClosedCaptionDisabled
 import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -236,8 +236,8 @@ fun VodOverlay(
                                     .background(Color.Black.copy(alpha = 0.65f), CircleShape)
                             ) {
                                 Icon(
-                                    imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "Play/Pause",
+                                    imageVector = if (state.isEnded) Icons.Default.Replay else if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (state.isEnded) "Replay" else "Play/Pause",
                                     tint = Color.White,
                                     modifier = Modifier.size(36.dp)
                                 )
@@ -523,7 +523,7 @@ private fun VodBottomBar(
                 modifier = Modifier.size(32.dp)
             ) {
                 Icon(
-                    imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    imageVector = if (state.isEnded) Icons.Default.Replay else if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = "Play/Pause",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)

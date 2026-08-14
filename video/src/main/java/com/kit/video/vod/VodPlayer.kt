@@ -107,6 +107,7 @@ fun VodPlayer(
     // 工业级状态
     var isLocked by remember { mutableStateOf(false) }
     var isLongPressing2x by remember { mutableStateOf(false) }
+    var isEnded by remember { mutableStateOf(false) }
     var basePlaybackSpeed by remember { mutableFloatStateOf(speed) }
     var danmakuEnabled by remember { mutableStateOf(true) }
     var subtitleEnabled by remember { mutableStateOf(true) }
@@ -221,6 +222,11 @@ fun VodPlayer(
                         currentOnPlayingStateChanged(isPlaying)
                     }
                     isBuffering = player.playbackState == Player.STATE_BUFFERING
+                    val wasEnded = isEnded
+                    isEnded = player.playbackState == Player.STATE_ENDED
+                    if (isEnded && !wasEnded) {
+                        isControlsVisible = true // 播放结束时自动展示控制栏与重播按钮
+                    }
 
                     // 弹幕派发引擎
                     if (danmakuEnabled && player.isPlaying) {
@@ -273,6 +279,7 @@ fun VodPlayer(
         showDecoderBadge = showDecoderBadge,
         isLocked = isLocked,
         isLongPressing2x = isLongPressing2x,
+        isEnded = isEnded,
         danmakuEnabled = danmakuEnabled,
         subtitleEnabled = subtitleEnabled,
         currentQualityName = currentQuality?.name ?: "1080P",
@@ -411,9 +418,18 @@ fun VodPlayer(
                 onBackClick = onBackClick,
                 onPlayPauseClick = {
                     playerView?.exoPlayer?.let { player ->
-                        if (player.isPlaying) player.pause() else player.play()
-                        isPlaying = player.isPlaying
-                        currentOnPlayingStateChanged(isPlaying)
+                        if (player.playbackState == Player.STATE_ENDED || isEnded) {
+                            // 🚀 播放已结束：重置到开头并重新起播！
+                            player.seekTo(0L)
+                            player.play()
+                            isPlaying = true
+                            isEnded = false
+                            currentOnPlayingStateChanged(true)
+                        } else {
+                            if (player.isPlaying) player.pause() else player.play()
+                            isPlaying = player.isPlaying
+                            currentOnPlayingStateChanged(isPlaying)
+                        }
                         isControlsVisible = true
                     }
                 },
