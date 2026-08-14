@@ -176,6 +176,14 @@ class FeedPlayerManager(
         FeedMediaHelper.preloadNextVideo(context, nextVideoUrl)
     }
 
+    /**
+     * 🚀 工业级双向预加载队列 (Bidirectional Preload Queue)：
+     * 上下双向智能预热，无论向上滑还是向下滑切页全部 0ms 秒播！
+     */
+    fun preloadBidirectional(prevVideoUrl: String?, nextVideoUrl: String?) {
+        FeedMediaHelper.preloadBidirectional(context, prevVideoUrl, nextVideoUrl)
+    }
+
     val exoPlayer: ExoPlayer? get() = player
 
     fun seekTo(positionMs: Long) {

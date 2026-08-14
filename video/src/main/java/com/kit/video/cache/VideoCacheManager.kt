@@ -104,6 +104,14 @@ object VideoCacheManager {
         preloadExecutor.execute {
             try {
                 val uri = Uri.parse(url)
+                val cache = getSimpleCache(context)
+                val key = DataSpec(uri).key ?: uri.toString()
+                val cachedBytes = cache.getCachedBytes(key, 0, bytes)
+                if (cachedBytes >= bytes) {
+                    Log.d(TAG, "⚡ [VideoCache Preload SKIP] 目标数据已在磁盘缓存中 ($cachedBytes 字节): $url")
+                    return@execute
+                }
+
                 val dataSource = (getCacheDataSourceFactory(context) as CacheDataSource.Factory).createDataSource()
                 val dataSpec = DataSpec.Builder()
                     .setUri(uri)
@@ -115,22 +123,53 @@ object VideoCacheManager {
                 writer.cache()
                 Log.d(TAG, "✅ [VideoCache Preload] 预加载就绪: $url")
             } catch (e: Throwable) {
-                Log.d(TAG, "预加载取消或完成: ${e.message}")
+                Log.d(TAG, "预加载完成或跳过: ${e.message}")
             }
         }
     }
 
     /**
-     * 检查某个 URL 的内容是否已缓存在磁盘中
+     * 🚀 工业级双向预加载队列 (Bidirectional Preload Queue)：
+     * 1. 优先预加载下一个视频 (nextUrl, 概率最高)；
+     * 2. 紧接着预加载上一个视频 (prevUrl, 回看概率)，
+     * 无论用户向上滑或向下滑动，双向切页全部 0ms 瞬间起播！
      */
-    fun isCached(context: Context, url: String): Boolean {
-        if (url.isBlank()) return false
-        val cache = getSimpleCache(context)
-        val uri = Uri.parse(url)
-        val dataSpec = DataSpec(uri)
-        val key = dataSpec.key ?: uri.toString()
-        val cachedBytes = cache.getCachedBytes(key, 0, Long.MAX_VALUE)
-        return cachedBytes > 0
+    fun preloadBidirectional(
+        context: Context,
+        prevUrl: String?,
+        nextUrl: String?,
+        bytes: Long = 2L * 1024 * 1024
+    ) {
+        // 1. 优先将下一个视频入队
+        if (!nextUrl.isNullOrBlank()) {
+            preload(context, nextUrl, bytes)
+        }
+        // 2. 将上一个视频入队（如未缓存）
+        if (!prevUrl.isNullOrBlank()) {
+            preload(context, prevUrl, bytes)
+        }
+    }
+
+    /**
+     * 获取某个 URL 在本地磁盘已缓存的字节数
+     */
+    fun getCachedBytes(context: Context, url: String): Long {
+        if (url.isBlank()) return 0L
+        return try {
+            val cache = getSimpleCache(context)
+            val uri = Uri.parse(url)
+            val key = DataSpec(uri).key ?: uri.toString()
+            cache.getCachedBytes(key, 0, Long.MAX_VALUE)
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    /**
+     * 检查某个 URL 的内容是否已缓存在磁盘中 (至少满足 minBytes)
+     */
+    fun isCached(context: Context, url: String, minBytes: Long = 1L): Boolean {
+        return getCachedBytes(context, url) >= minBytes
     }
 
     /**

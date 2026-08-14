@@ -35,7 +35,7 @@ VideoKit/
 - **两阶段加载视觉**：
   - **首帧渲染前**：显示封面 Cover + 居中 Loading 圈（且包含 200ms 防抖延时，防止网速极快时闪烁）；
   - **播放中二次缓冲**：隐藏居中圈，启动底部 GPU 硬件加速发光呼吸灯 (`bottomBreathingView`)，保持视频画面中央 0 遮挡。
-- **Preload Queue 预加载队列**：在起播当前 `page` 时，后台异步线程使用 `CacheWriter` 提前将下一个视频 `page + 1` 的前 2MB 数据下载至 1GB LRU 磁盘缓存 (`VideoCacheManager`)，实现切页 0ms 闪电秒播。
+- **🚀 工业级双向预加载队列 (Bidirectional Preload Queue)**：在起播当前 `page` 时，后台异步线程使用 `CacheWriter` 提前将下一个视频 `page + 1` 与上一个视频 `page - 1` 的前 2MB 数据静默下载至 1GB LRU 磁盘缓存 (`VideoCacheManager`)，实现上下双向切页 0ms 闪电秒播。
 - **🎞️ 抖音级底部微型拖拽进度条 (`FeedMicroProgressBar`)**：常态 2dp 极细微纯白线，按压/拖拽时平滑粗化至 6dp，浮现高光 Thumb 并跟随时间胶囊气泡（如 `00:15 / 00:45`），松手准时 Seek。
 - **⏸️ 单击暂停/播放与居中大图标**：单击视频任意位置切换暂停/播放，暂停时中央浮现半透明大播放图标。
 

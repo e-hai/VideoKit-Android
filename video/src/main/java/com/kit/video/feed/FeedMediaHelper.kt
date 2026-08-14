@@ -52,6 +52,13 @@ object FeedMediaHelper {
         VideoCacheManager.preload(context, videoUrl)
     }
 
+    /**
+     * 🚀 工业级双向预加载队列 (Bidirectional Preload Queue)
+     */
+    fun preloadBidirectional(context: Context, prevVideoUrl: String?, nextVideoUrl: String?) {
+        VideoCacheManager.preloadBidirectional(context, prevVideoUrl, nextVideoUrl)
+    }
+
     fun getCacheFactory(context: Context): DataSource.Factory {
         return VideoCacheManager.getCacheDataSourceFactory(context)
     }

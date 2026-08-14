@@ -63,9 +63,9 @@ fun FeedScreen(
     // 记录上一次真正发起的播放页面 Index，避免弹回原视频时重复加载
     var lastPlayedPage by remember { mutableIntStateOf(-1) }
 
-    // 关键防重复与沉降优化 + Preload Queue 后台预加载队列：
+    // 关键防重复与沉降优化 + 🚀 工业级双向预加载队列 (Bidirectional Preload Queue)：
     // 1. 只有在手指停止拖拽 (!isScrollInProgress) 且真正翻到了新 Page (settledPage != lastPlayedPage) 时，才发起起播；
-    // 2. 当前起播的同时，后台线程自动触发对下个 Page (settledPage + 1) 的前 2MB 数据静默预拉取，切页时 0ms 闪电秒播！
+    // 2. 当前起播的同时，后台线程自动并发/排队预热下一个视频 (page + 1) 与上一个视频 (page - 1) 的前 2MB 数据，双向滑动皆为 0ms 秒播！
     LaunchedEffect(pagerState.settledPage, pagerState.isScrollInProgress) {
         if (!pagerState.isScrollInProgress) {
             val settledPage = pagerState.settledPage
@@ -76,11 +76,13 @@ fun FeedScreen(
                     lastPlayedPage = settledPage
                     exoManager.playVideoFromCoverView(coverView, item.primaryUrl)
 
-                    // 触发 Preload Queue：后台静默预拉取下一个视频的数据
+                    // 🚀 触发双向预加载队列：上下双向智能预拉取
+                    val prevItem = videoList.getOrNull(settledPage - 1)
                     val nextItem = videoList.getOrNull(settledPage + 1)
-                    if (nextItem != null) {
-                        exoManager.preloadNextVideo(nextItem.primaryUrl)
-                    }
+                    exoManager.preloadBidirectional(
+                        prevVideoUrl = prevItem?.primaryUrl,
+                        nextVideoUrl = nextItem?.primaryUrl
+                    )
                 }
             }
         }
