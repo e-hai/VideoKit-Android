@@ -38,12 +38,10 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,16 +66,15 @@ import androidx.compose.ui.unit.sp
 import com.kit.video.ui.PremiumBufferSlider
 import com.kit.video.ui.formatPlaybackTime
 
-
 /**
- * 工业级沉浸式点播控制层：
- * 1. 顶栏 / 底栏 / 居中播放器
- * 2. 屏幕锁与防误触解锁交互
- * 3. 长按 2X 极速快进发光 HUD
- * 4. 进度条拖动浮动时间预览
- * 5. Canvas 60fps 高性能防重叠弹幕层
- * 6. 影视级双语外挂字幕渲染
- * 7. 弹幕、字幕、画质、倍速快捷开关
+ * 工业级沉浸式点播控制层（排版优化版）：
+ * 1. 顶栏 (TopBar)：返回 + 标题 + CC 字幕 + 调试更多入口
+ * 2. 居中区域：大播放/暂停 + 左右快退/快进 10s
+ * 3. 屏幕防误触锁：左侧边缘独立悬浮
+ * 4. 底栏 (BottomBar)：双层工业级排版
+ *    - 上层：横贯进度条 (PremiumBufferSlider + 拖拽时间气泡)
+ *    - 下层：左侧播放/暂停与时间 + 【弹】弹幕开关；右侧【画质】+【倍速】+【全屏】
+ * 5. 图层：60fps Canvas 弹幕层 + 影视级双语字幕层 + 2X 快进发光 HUD
  */
 @Composable
 fun VodOverlay(
@@ -147,7 +144,7 @@ fun VodOverlay(
                 modifier = Modifier
                     .size(44.dp)
                     .background(
-                        if (state.isLocked) Color(0xFFFF9800).copy(alpha = 0.85f)
+                        if (state.isLocked) Color(0xFFFF9800).copy(alpha = 0.88f)
                         else Color.Black.copy(alpha = 0.55f),
                         CircleShape
                     )
@@ -174,10 +171,10 @@ fun VodOverlay(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            Color.Black.copy(alpha = if (state.isControlsVisible) 0.32f else 0.12f)
+                            Color.Black.copy(alpha = if (state.isControlsVisible) 0.35f else 0.12f)
                         )
                 ) {
-                    // 顶栏
+                    // 顶栏 (清爽大方：返回 + 标题 + CC字幕 + 更多)
                     AnimatedVisibility(
                         visible = state.isControlsVisible,
                         enter = fadeIn(),
@@ -187,9 +184,6 @@ fun VodOverlay(
                         VodTopBar(
                             state = state,
                             onBackClick = onBackClick,
-                            onSpeedClick = onSpeedClick,
-                            onQualityClick = onQualityClick,
-                            onToggleDanmaku = onToggleDanmaku,
                             onToggleSubtitle = onToggleSubtitle,
                             topTrailingContent = topTrailingContent
                         )
@@ -284,7 +278,7 @@ fun VodOverlay(
                         }
                     }
 
-                    // 底栏进度与全屏控制
+                    // 底栏 (双层工业级排版：上层进度条，下层弹幕/画质/倍速/全屏)
                     AnimatedVisibility(
                         visible = state.isControlsVisible,
                         enter = fadeIn(),
@@ -293,8 +287,12 @@ fun VodOverlay(
                     ) {
                         VodBottomBar(
                             state = state,
+                            onPlayPauseClick = onPlayPauseClick,
                             onSeekTo = onSeekTo,
                             onDraggingStateChanged = onDraggingStateChanged,
+                            onToggleDanmaku = onToggleDanmaku,
+                            onQualityClick = onQualityClick,
+                            onSpeedClick = onSpeedClick,
                             onToggleFullscreen = onToggleFullscreen
                         )
                     }
@@ -360,7 +358,7 @@ private fun SubtitleLayer(
     isControlsVisible: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val bottomPad = if (isControlsVisible) 76.dp else if (isLandscape) 24.dp else 16.dp
+    val bottomPad = if (isControlsVisible) 96.dp else if (isLandscape) 24.dp else 16.dp
     Column(
         modifier = modifier
             .padding(bottom = bottomPad)
@@ -448,15 +446,12 @@ private fun rememberAndroidTextPaint(): android.graphics.Paint {
 }
 
 // ============================================================================
-// 子组件：顶栏 (含画质、弹幕、字幕、倍速、返回)
+// 子组件：顶栏 (清爽大方：返回 + 标题 + CC字幕 + 更多)
 // ============================================================================
 @Composable
 private fun VodTopBar(
     state: VodOverlayState,
     onBackClick: () -> Unit,
-    onSpeedClick: () -> Unit,
-    onQualityClick: () -> Unit,
-    onToggleDanmaku: () -> Unit,
     onToggleSubtitle: () -> Unit,
     topTrailingContent: @Composable RowScope.() -> Unit
 ) {
@@ -493,25 +488,6 @@ private fun VodTopBar(
             modifier = Modifier.weight(1f)
         )
 
-        // 弹幕开关
-        IconButton(
-            onClick = onToggleDanmaku,
-            modifier = Modifier.size(36.dp)
-        ) {
-            Text(
-                text = "弹",
-                color = if (state.danmakuEnabled) Color(0xFF64B5F6) else Color.Gray,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .background(
-                        if (state.danmakuEnabled) Color.White.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.06f),
-                        CircleShape
-                    )
-                    .padding(5.dp)
-            )
-        }
-
         // 字幕 CC 开关
         IconButton(
             onClick = onToggleSubtitle,
@@ -525,44 +501,22 @@ private fun VodTopBar(
             )
         }
 
-        // 画质切换
-        Text(
-            text = state.currentQualityName,
-            color = Color.White,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
-                .clickable { onQualityClick() }
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-
-        Spacer(modifier = Modifier.width(6.dp))
-
-        // 倍速
-        Text(
-            text = "${state.speed}x",
-            color = Color.White,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
-                .clickable { onSpeedClick() }
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-
         topTrailingContent()
     }
 }
 
 // ============================================================================
-// 子组件：底栏 (含拖动时间与帧预览卡片)
+// 子组件：底栏 (双层工业级排版：上层进度条，下层弹幕/画质/倍速/全屏)
 // ============================================================================
 @Composable
 private fun VodBottomBar(
     state: VodOverlayState,
+    onPlayPauseClick: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onDraggingStateChanged: (Boolean) -> Unit,
+    onToggleDanmaku: () -> Unit,
+    onQualityClick: () -> Unit,
+    onSpeedClick: () -> Unit,
     onToggleFullscreen: () -> Unit
 ) {
     Column(
@@ -570,58 +524,120 @@ private fun VodBottomBar(
             .fillMaxWidth()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.90f))
                 )
             )
             .then(
-                if (state.isLandscapeLayout) Modifier.padding(bottom = 8.dp)
-                else Modifier.navigationBarsPadding()
+                if (state.isLandscapeLayout) Modifier.padding(bottom = 10.dp)
+                else Modifier.navigationBarsPadding().padding(bottom = 4.dp)
             )
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp)
     ) {
+        // 第一层：横贯进度条 (自带时间气泡)
+        PremiumBufferSlider(
+            currentPositionMs = state.currentPositionMs,
+            bufferedPositionMs = state.bufferedPositionMs,
+            durationMs = state.durationMs,
+            onSeekTo = onSeekTo,
+            onDraggingStateChanged = onDraggingStateChanged,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // 第二层：工具栏 (左侧时间与弹幕开关，右侧画质/倍速/全屏)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = formatPlaybackTime(state.currentPositionMs),
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 10.dp)
+            // 左侧：播放/暂停小图标
+            IconButton(
+                onClick = onPlayPauseClick,
+                modifier = Modifier.size(32.dp)
             ) {
-                PremiumBufferSlider(
-                    currentPositionMs = state.currentPositionMs,
-                    bufferedPositionMs = state.bufferedPositionMs,
-                    durationMs = state.durationMs,
-                    onSeekTo = onSeekTo,
-                    onDraggingStateChanged = onDraggingStateChanged,
-                    modifier = Modifier.fillMaxWidth()
+                Icon(
+                    imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = "Play/Pause",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
+            // 当前时间 / 总时间
             Text(
-                text = formatPlaybackTime(state.durationMs),
-                color = Color.LightGray,
+                text = "${formatPlaybackTime(state.currentPositionMs)} / ${formatPlaybackTime(state.durationMs)}",
+                color = Color.White.copy(alpha = 0.9f),
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // 🚀 B站经典弹幕开关【弹】：醒目直观，手指极易触达！
+            Box(
+                modifier = Modifier
+                    .background(
+                        if (state.danmakuEnabled) Color(0xFF2196F3).copy(alpha = 0.85f)
+                        else Color.White.copy(alpha = 0.12f),
+                        RoundedCornerShape(12.dp)
+                    )
+                    .border(
+                        1.dp,
+                        if (state.danmakuEnabled) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.2f),
+                        RoundedCornerShape(12.dp)
+                    )
+                    .clickable { onToggleDanmaku() }
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    text = if (state.danmakuEnabled) "弹 开启" else "弹 关闭",
+                    color = if (state.danmakuEnabled) Color.White else Color.Gray,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // 右侧：画质胶囊按钮
+            Text(
+                text = state.currentQualityName,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
+                    .clickable { onQualityClick() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // 右侧：倍速胶囊按钮
+            Text(
+                text = "${state.speed}x",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
+                    .clickable { onSpeedClick() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
             )
 
             Spacer(modifier = Modifier.width(6.dp))
 
+            // 全屏/退出全屏
             IconButton(
                 onClick = onToggleFullscreen,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(32.dp)
             ) {
                 Icon(
                     imageVector = if (state.isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
                     contentDescription = "Fullscreen",
-                    tint = Color.White
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
