@@ -1,20 +1,20 @@
 package com.kit.video.sample.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -24,7 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,8 +39,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.kit.video.feed.FeedCoverPlayerView
+import com.kit.video.feed.FeedMicroProgressBar
 import com.kit.video.feed.FeedPlayerManager
 import com.kit.video.sample.media.SampleMediaCatalog
+import kotlinx.coroutines.delay
 
 @Composable
 fun FeedScreen(
@@ -82,6 +86,22 @@ fun FeedScreen(
         }
     }
 
+    // 实时播放进度轮询 (支持底栏微型进度条)
+    var currentPositionMs by remember { mutableLongStateOf(0L) }
+    var bufferedPositionMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(0L) }
+    var isPlaying by remember { mutableStateOf(true) }
+
+    LaunchedEffect(exoManager) {
+        while (true) {
+            currentPositionMs = exoManager.getCurrentPosition()
+            bufferedPositionMs = exoManager.getBufferedPosition()
+            durationMs = exoManager.getDuration()
+            isPlaying = exoManager.isPlaying()
+            delay(100)
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color.Black
@@ -92,7 +112,21 @@ fun FeedScreen(
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val item = videoList[page]
-                Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            if (exoManager.isPlaying()) {
+                                exoManager.pause()
+                            } else {
+                                exoManager.play()
+                            }
+                            isPlaying = exoManager.isPlaying()
+                        }
+                ) {
                     AndroidView(
                         factory = { ctx ->
                             FeedCoverPlayerView(ctx).also { view ->
@@ -105,6 +139,24 @@ fun FeedScreen(
                         modifier = Modifier.fillMaxSize()
                     )
 
+                    // 抖音风格暂停状态居中半透明大播放图标
+                    if (!isPlaying && page == pagerState.settledPage) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .size(72.dp)
+                                .background(Color.Black.copy(alpha = 0.55f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Play",
+                                tint = Color.White.copy(alpha = 0.9f),
+                                modifier = Modifier.size(44.dp)
+                            )
+                        }
+                    }
+
                     // 抖音风格视频底部信息界面
                     Column(
                         modifier = Modifier
@@ -115,7 +167,7 @@ fun FeedScreen(
                                     colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
                                 )
                             )
-                            .padding(24.dp)
+                            .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 28.dp)
                     ) {
                         Text(
                             text = item.author,
@@ -139,6 +191,20 @@ fun FeedScreen(
                     }
                 }
             }
+
+            // 🚀 抖音级底部极细微拖拽进度条 (Feed Micro Scrubbing Bar)
+            FeedMicroProgressBar(
+                currentPositionMs = currentPositionMs,
+                bufferedPositionMs = bufferedPositionMs,
+                durationMs = durationMs,
+                onSeekTo = { targetMs ->
+                    exoManager.seekTo(targetMs)
+                    currentPositionMs = targetMs
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+            )
 
             // 顶部返回操作栏
             IconButton(

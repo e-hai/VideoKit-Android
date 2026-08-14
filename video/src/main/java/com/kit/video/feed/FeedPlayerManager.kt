@@ -176,6 +176,28 @@ class FeedPlayerManager(
         FeedMediaHelper.preloadNextVideo(context, nextVideoUrl)
     }
 
+    val exoPlayer: ExoPlayer? get() = player
+
+    fun seekTo(positionMs: Long) {
+        player?.seekTo(positionMs.coerceAtLeast(0))
+    }
+
+    fun pause() {
+        player?.pause()
+    }
+
+    fun play() {
+        player?.play()
+    }
+
+    fun isPlaying(): Boolean = player?.isPlaying == true
+
+    fun getCurrentPosition(): Long = player?.currentPosition?.coerceAtLeast(0) ?: 0L
+
+    fun getBufferedPosition(): Long = player?.bufferedPosition?.coerceAtLeast(0) ?: 0L
+
+    fun getDuration(): Long = player?.duration?.coerceAtLeast(0) ?: 0L
+
     companion object {
         private const val TAG = "FeedPlayerManager"
     }
