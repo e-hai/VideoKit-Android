@@ -229,51 +229,18 @@ fun VodOverlay(
                                 )
                             }
                         } else if (state.isControlsVisible) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(36.dp)
+                            IconButton(
+                                onClick = onPlayPauseClick,
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .background(Color.Black.copy(alpha = 0.65f), CircleShape)
                             ) {
-                                IconButton(
-                                    onClick = { onSeekBy(-10000) },
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .background(Color.Black.copy(alpha = 0.45f), CircleShape)
-                                ) {
-                                    Icon(
-                                        Icons.Default.FastRewind,
-                                        contentDescription = "Rewind 10s",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = onPlayPauseClick,
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .background(Color.Black.copy(alpha = 0.65f), CircleShape)
-                                ) {
-                                    Icon(
-                                        imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = "Play/Pause",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(36.dp)
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = { onSeekBy(10000) },
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .background(Color.Black.copy(alpha = 0.45f), CircleShape)
-                                ) {
-                                    Icon(
-                                        Icons.Default.FastForward,
-                                        contentDescription = "Forward 10s",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
+                                Icon(
+                                    imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = "Play/Pause",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(36.dp)
+                                )
                             }
                         }
                     }

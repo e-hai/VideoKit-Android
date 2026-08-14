@@ -74,23 +74,8 @@ class VodPlayerView @JvmOverloads constructor(
 
     // 手势识别
     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
-        override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+        override fun onSingleTapUp(e: MotionEvent): Boolean {
             onSingleTapListener?.invoke()
-            return true
-        }
-
-        override fun onDoubleTap(e: MotionEvent): Boolean {
-            if (isLocked) return false
-            val width = width
-            if (width > 0) {
-                if (e.x < width / 2) {
-                    seekByOffset(-10000)
-                    showHud("⏪ -10s")
-                } else {
-                    seekByOffset(10000)
-                    showHud("⏩ +10s")
-                }
-            }
             return true
         }
 
