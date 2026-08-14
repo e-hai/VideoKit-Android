@@ -259,8 +259,7 @@ fun MainAppRouter(
                     )
 
                     AppScreen.Feed -> FeedScreen(
-                        onBackClick = { currentScreen = AppScreen.Home },
-                        onGoVod = { currentScreen = AppScreen.Vod }
+                        onBackClick = { currentScreen = AppScreen.Home }
                     )
 
                     AppScreen.Clip -> ClipScreen(

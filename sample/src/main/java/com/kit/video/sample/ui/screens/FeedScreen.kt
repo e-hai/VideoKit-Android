@@ -42,8 +42,7 @@ import com.kit.video.sample.media.SampleMediaCatalog
 
 @Composable
 fun FeedScreen(
-    onBackClick: () -> Unit,
-    onGoVod: () -> Unit
+    onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -141,7 +140,7 @@ fun FeedScreen(
                 }
             }
 
-            // 顶部返回与跳转操作栏
+            // 顶部返回操作栏
             IconButton(
                 onClick = onBackClick,
                 modifier = Modifier
@@ -154,23 +153,6 @@ fun FeedScreen(
                     contentDescription = "Back",
                     tint = Color.White
                 )
-            }
-
-            Button(
-                onClick = onGoVod,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 20.dp, end = 16.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.padding(end = 4.dp)
-                )
-                Text("Single Mode", color = Color.White)
             }
         }
     }
