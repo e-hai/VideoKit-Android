@@ -3,6 +3,9 @@ package com.kit.video.vod
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -28,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,12 +44,14 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.RenderersFactory
 import com.kit.video.ui.formatPlaybackTime
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 
 /**
  * 工业级沉浸式点播（VOD）全功能 Compose 组件：
  * 1. 深度整合 Media3 + FFmpeg OpenGL ES 2.0 GPU 软解渲染管线
- * 2. ⚡ 长按 2X 极速快进 + 发光指示 HUD
+ * 2. ⚡ 手指长按 2X 极速加速，松开瞬间停止加速恢复原速
  * 3. 🔒 屏幕锁 / 防误触模式
  * 4. ⏱️ 记忆播放 / 历史进度断点自动续播
  * 5. 🎚️ 多画质 / 清晰度无缝切换
@@ -98,7 +104,7 @@ fun VodPlayer(
     var durationMs by remember { mutableLongStateOf(0L) }
     var isDraggingSlider by remember { mutableStateOf(false) }
 
-    // 工业级新增状态
+    // 工业级状态
     var isLocked by remember { mutableStateOf(false) }
     var isLongPressing2x by remember { mutableStateOf(false) }
     var basePlaybackSpeed by remember { mutableFloatStateOf(speed) }
@@ -274,7 +280,38 @@ fun VodPlayer(
         activeDanmakus = activeDanmakus
     )
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            // 🚀 Compose 顶层精准长按 2X 快进手势捕获：按住 380ms 触发 2.0x，松手立即恢复原速
+            .pointerInput(isLocked, basePlaybackSpeed) {
+                if (isLocked) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    try {
+                        withTimeout(380L) {
+                            waitForUpOrCancellation()
+                        }
+                    } catch (e: TimeoutCancellationException) {
+                        // 超过 380ms 确认为长按，立即进入 2.0X 极速快进
+                        isLongPressing2x = true
+                        playerView?.setSpeed(2.0f)
+
+                        // 持续跟踪触摸状态，直到所有手指抬起或取消
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val anyPressed = event.changes.any { it.pressed }
+                            if (!anyPressed) {
+                                break
+                            }
+                        }
+                        // 手指松开，微秒级恢复原速并关闭 HUD
+                        isLongPressing2x = false
+                        playerView?.setSpeed(basePlaybackSpeed)
+                    }
+                }
+            }
+    ) {
         AndroidView(
             factory = { ctx ->
                 VodPlayerView(ctx).apply {
