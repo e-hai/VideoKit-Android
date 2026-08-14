@@ -186,9 +186,10 @@ class VodPlayerView @JvmOverloads constructor(
             playerView.player = exoPlayer
         }
 
-        val mediaItem = MediaItem.fromUri(url.toUri())
+        // 🚀 使用全局磁盘缓存数据源，边播边存，二次播放 0 网络耗时极速起播
+        val mediaSource = com.kit.video.cache.VideoCacheManager.createMediaSource(context, url.toUri())
         exoPlayer?.apply {
-            setMediaItem(mediaItem)
+            setMediaSource(mediaSource)
             prepare()
             setSpeed(currentSpeed)
             playWhenReady = true
@@ -196,7 +197,9 @@ class VodPlayerView @JvmOverloads constructor(
     }
 
     private fun buildPlayer(renderersFactory: RenderersFactory): ExoPlayer {
-        return ExoPlayer.Builder(context, renderersFactory).build().apply {
+        return ExoPlayer.Builder(context, renderersFactory)
+            .setMediaSourceFactory(com.kit.video.cache.VideoCacheManager.createMediaSourceFactory(context))
+            .build().apply {
             addAnalyticsListener(object : AnalyticsListener {
                 override fun onVideoDecoderInitialized(
                     eventTime: AnalyticsListener.EventTime,
