@@ -27,8 +27,29 @@ data class SampleVideo(
 
 object SampleMediaCatalog {
 
-    /** VOD 调试面板：覆盖 H.264 / HEVC / VP9 / AV1 */
+    /** VOD 调试面板：覆盖 H.264 / HEVC / VP9 / AV1 / HLS 多码率 */
     val vodSources: List<SampleVideo> = listOf(
+        SampleVideo(
+            id = "apple_hls_multibitrate",
+            name = "Apple HLS 多画质自适应流",
+            description = "单 URL 包含 360P/720P/1080P/4K 多档自适应画质",
+            codec = "HLS / fMP4",
+            urls = listOf(
+                "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
+                "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8",
+                "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8"
+            )
+        ),
+        SampleVideo(
+            id = "akamai_hls_multibitrate",
+            name = "Akamai HLS 高清多码率长片",
+            description = "长视频多分辨率平滑切轨测试",
+            codec = "HLS / H.264",
+            urls = listOf(
+                "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+                "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8"
+            )
+        ),
         SampleVideo(
             id = "bbb_h264_10s",
             name = "BBB H.264 (10s)",

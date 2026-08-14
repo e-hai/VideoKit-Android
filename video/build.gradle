@@ -38,6 +38,8 @@ dependencies {
 
     // 使用 ExoPlayer 进行媒体播放
     implementation libs.androidx.media3.exoplayer
+    implementation libs.androidx.media3.exoplayer.hls
+    implementation libs.androidx.media3.exoplayer.dash
     // 使用 OkHttp 网络栈加载数据
     implementation libs.androidx.media3.datasource.okhttp
     // 构建媒体播放界面
