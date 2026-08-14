@@ -1,12 +1,44 @@
-# VideoKit 🎬
-
+[![JitPack](https://jitpack.io/v/e-hai/VideoKit.svg)](https://jitpack.io/#e-hai/VideoKit)
 [![Android AGP](https://img.shields.io/badge/AGP-9.3.1-brightgreen.svg)](https://developer.android.com/studio/releases/gradle-plugin)
 [![Gradle](https://img.shields.io/badge/Gradle-9.5.0-blue.svg)](https://gradle.org)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple.svg)](https://kotlinlang.org)
 [![Media3](https://img.shields.io/badge/Media3-1.10.1-red.svg)](https://developer.android.com/guide/topics/media/media3)
 [![Compose](https://img.shields.io/badge/Compose-Material3-orange.svg)](https://developer.android.com/jetpack/compose)
 
-**VideoKit** 是一个基于 **Android Jetpack Compose** 与 **AndroidX Media3 (ExoPlayer)** 构建的工业级 Android 音视频 SDK 全家桶。涵盖 **竖滑 Feed**、**沉浸点播 VOD（7大工业级特性 + PiP）**、**剪辑调参 Clip**，以及基于 **OpenGL ES 2.0 GPU Shader 渲染** 的 FFmpeg NDK 软解扩展（`:video-ffmpeg`）。
+**VideoKit** 是一个基于 **Android Jetpack Compose** 与 **AndroidX Media3 (ExoPlayer)** 构建的工业级 Android 音视频 SDK 全家桶。涵盖 **竖滑 Feed（双向预加载队列 + 抖音级微型进度条）**、**沉浸点播 VOD（7大工业级特性 + PiP）**、**剪辑调参 Clip**，以及基于 **OpenGL ES 3.0 GPU Shader 渲染** 的 FFmpeg NDK 软解扩展（`:video-ffmpeg`）。
+
+---
+
+## 📦 依赖引入 (Installation via JitPack)
+
+### 1. 配置 Maven 仓库
+在项目的 `settings.gradle`（或根目录 `build.gradle`）中添加 JitPack 镜像源：
+
+```groovy
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+}
+```
+
+### 2. 引入对应模块
+在宿主 App 模块的 `build.gradle` 中按需添加依赖：
+
+```groovy
+dependencies {
+    // 1. 【核心 SDK】包含 Feed 竖滑、VOD 点播、Clip 剪辑、1GB LRU 缓存与双向预加载
+    implementation 'com.github.e-hai.VideoKit:video:v1.0.0'
+
+    // 2. 【可选 · FFmpeg 独立软解扩展库】包含 OpenGL ES 3.0 GPU 着色器软解渲染器与 arm64-v8a 动态库
+    implementation 'com.github.e-hai.VideoKit:video-ffmpeg:v1.0.0'
+}
+```
+
+---
 
 ---
 

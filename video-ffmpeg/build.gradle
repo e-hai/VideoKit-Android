@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
+    id 'maven-publish'
 }
 
 android {
@@ -41,6 +42,25 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    publishing {
+        singleVariant('release') {
+            withSourcesJar()
+        }
+    }
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                from components.release
+                groupId = 'com.github.e-hai.VideoKit'
+                artifactId = 'video-ffmpeg'
+                version = '1.0.0'
+            }
+        }
     }
 }
 
