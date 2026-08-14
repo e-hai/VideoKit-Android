@@ -15,13 +15,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -29,6 +32,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -57,6 +62,7 @@ import androidx.media3.common.PlaybackException
 import com.kit.video.ffmpeg.FfmpegRenderersFactory
 import com.kit.video.sample.media.SampleMediaCatalog
 import com.kit.video.sample.media.SampleVideo
+import com.kit.video.vod.VideoQuality
 import com.kit.video.vod.VodPlayer
 import com.kit.video.vod.VodPlayerView
 
@@ -91,12 +97,17 @@ fun VodScreen(
     var activeDecoderName by remember { mutableStateOf("Initializing...") }
     var isHardwareDecoder by remember { mutableStateOf(true) }
 
+    // 工业级新增弹窗状态
     var showLabSheet by remember { mutableStateOf(false) }
     var showSpeedSheet by remember { mutableStateOf(false) }
+    var showQualitySheet by remember { mutableStateOf(false) }
     val labSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val speedSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val qualitySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val speedOptions = listOf(0.5f, 1.0f, 1.25f, 1.5f, 2.0f)
+    val qualities = remember(currentPlayUrl) { VideoQuality.defaultQualities(currentPlayUrl) }
+    var selectedQualityId by remember { mutableStateOf("1080p") }
 
     val renderersFactory = remember {
         FfmpegRenderersFactory(context)
@@ -157,6 +168,8 @@ fun VodScreen(
             speed = selectedSpeed,
             isInPipMode = isInPipMode,
             externalIsPlaying = externalIsPlaying,
+            qualities = qualities,
+            selectedQualityId = selectedQualityId,
             onBackClick = onBackClick,
             onPlayingStateChanged = onPlayingStateChanged,
             onDecoderChanged = { name, isHw ->
@@ -182,18 +195,19 @@ fun VodScreen(
                 isLandscape = landscape
             },
             onSpeedClick = { showSpeedSheet = true },
+            onQualityClick = { showQualitySheet = true },
             topTrailingContent = {
                 IconButton(
                     onClick = { showLabSheet = true },
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(36.dp)
                         .background(Color(0xFF2196F3).copy(alpha = 0.85f), CircleShape)
                 ) {
                     Icon(
                         Icons.Default.Science,
                         contentDescription = "调试面板",
                         tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             },
@@ -219,6 +233,7 @@ fun VodScreen(
         )
     }
 
+    // 调试设置面板
     if (showLabSheet) {
         ModalBottomSheet(
             onDismissRequest = { showLabSheet = false },
@@ -240,6 +255,7 @@ fun VodScreen(
         }
     }
 
+    // 倍速设置面板
     if (showSpeedSheet) {
         ModalBottomSheet(
             onDismissRequest = { showSpeedSheet = false },
@@ -255,6 +271,83 @@ fun VodScreen(
                     showSpeedSheet = false
                 }
             )
+        }
+    }
+
+    // 画质切换面板
+    if (showQualitySheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showQualitySheet = false },
+            sheetState = qualitySheetState,
+            containerColor = Color(0xFF1A1C20)
+        ) {
+            QualityBottomSheetContent(
+                qualities = qualities,
+                selectedQualityId = selectedQualityId,
+                onSelectQuality = { quality ->
+                    selectedQualityId = quality.id
+                    showQualitySheet = false
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun QualityBottomSheetContent(
+    qualities: List<VideoQuality>,
+    selectedQualityId: String,
+    onSelectQuality: (VideoQuality) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 28.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.HighQuality, contentDescription = null, tint = Color.White)
+            Text(
+                text = "切换清晰度 / 画质",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        qualities.forEach { quality ->
+            val selected = quality.id == selectedQualityId
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                        else Color.White.copy(alpha = 0.06f),
+                        RoundedCornerShape(12.dp)
+                    )
+                    .clickable { onSelectQuality(quality) }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = quality.name,
+                    color = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 15.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (selected) {
+                    Text(
+                        text = "✓ 当前选择",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }
@@ -279,13 +372,13 @@ private fun LabBottomSheetContent(
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            text = "调试面板",
+            text = "调试与片源面板",
             color = Color.White,
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp
         )
         Text(
-            text = "硬解优先，FFmpeg Renderer 兜底；片源不可用时自动切换同编码备用 URL。",
+            text = "硬解优先，FFmpeg OpenGL ES 2.0 GPU 渲染兜底；支持长按 2x 快进、断点续播、防误触锁与弹幕系统。",
             color = Color.Gray,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -307,7 +400,7 @@ private fun LabBottomSheetContent(
         ) {
             val badgeBg = if (isHardwareDecoder) Color(0xFF4CAF50) else Color(0xFFFF9800)
             Text(
-                text = if (isHardwareDecoder) "MediaCodec 硬解" else "FFmpeg 软解",
+                text = if (isHardwareDecoder) "MediaCodec 硬解" else "FFmpeg 软解 (GPU)",
                 color = Color.White,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,

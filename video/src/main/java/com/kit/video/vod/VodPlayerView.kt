@@ -47,8 +47,13 @@ class VodPlayerView @JvmOverloads constructor(
     var exoPlayer: ExoPlayer? = null
         private set
 
-    // 单击、横竖屏变化与解码器实时状态回调
+    var isLocked: Boolean = false
+    var isLongPressing: Boolean = false
+        private set
+
+    // 单击、长按、横竖屏变化与解码器实时状态回调
     var onSingleTapListener: (() -> Unit)? = null
+    var onLongPressChangedListener: ((isLongPressing: Boolean) -> Unit)? = null
     var onOrientationChangedListener: ((isLandscape: Boolean) -> Unit)? = null
     var onDecoderNameChangedListener: ((decoderName: String, isHardware: Boolean) -> Unit)? = null
     var onPlayerErrorListener: ((PlaybackException) -> Unit)? = null
@@ -77,7 +82,16 @@ class VodPlayerView @JvmOverloads constructor(
             return true
         }
 
+        override fun onLongPress(e: MotionEvent) {
+            if (isLocked) return
+            if (!isLongPressing) {
+                isLongPressing = true
+                onLongPressChangedListener?.invoke(true)
+            }
+        }
+
         override fun onDoubleTap(e: MotionEvent): Boolean {
+            if (isLocked) return false
             val width = width
             if (width > 0) {
                 if (e.x < width / 2) {
@@ -97,7 +111,7 @@ class VodPlayerView @JvmOverloads constructor(
             distanceX: Float,
             distanceY: Float
         ): Boolean {
-            if (e1 == null) return false
+            if (isLocked || e1 == null) return false
             val width = width
             val height = height
             if (width <= 0 || height <= 0) return false
@@ -125,8 +139,14 @@ class VodPlayerView @JvmOverloads constructor(
         addView(hudTextView, hudParams)
 
         setOnTouchListener { _, event ->
-            gestureDetector.onTouchEvent(event)
-            true
+            val handled = gestureDetector.onTouchEvent(event)
+            if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
+                if (isLongPressing) {
+                    isLongPressing = false
+                    onLongPressChangedListener?.invoke(false)
+                }
+            }
+            handled || isLongPressing
         }
 
         setupOrientationListener()

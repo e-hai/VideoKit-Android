@@ -6,7 +6,7 @@
 [![Media3](https://img.shields.io/badge/Media3-1.10.1-red.svg)](https://developer.android.com/guide/topics/media/media3)
 [![Compose](https://img.shields.io/badge/Compose-Material3-orange.svg)](https://developer.android.com/jetpack/compose)
 
-**VideoKit** 是一个基于 **Android Jetpack Compose** 与 **AndroidX Media3 (ExoPlayer)** 构建的工业级 Android 音视频 SDK。涵盖 **竖滑 Feed**、**沉浸点播 VOD（含 PiP）**、**剪辑调参 Clip**，以及按需加载的 FFmpeg NDK 软解扩展（`:video-ffmpeg`）。
+**VideoKit** 是一个基于 **Android Jetpack Compose** 与 **AndroidX Media3 (ExoPlayer)** 构建的工业级 Android 音视频 SDK 全家桶。涵盖 **竖滑 Feed**、**沉浸点播 VOD（7大工业级特性 + PiP）**、**剪辑调参 Clip**，以及基于 **OpenGL ES 2.0 GPU Shader 渲染** 的 FFmpeg NDK 软解扩展（`:video-ffmpeg`）。
 
 ---
 
@@ -21,7 +21,7 @@ graph TD
 
     subgraph video 核心能力
         CoreVideo --> Feed[feed · FeedCoverPlayerView + Preload]
-        CoreVideo --> Vod[vod · VodPlayer / Overlay / 手势]
+        CoreVideo --> Vod[vod · VodPlayer / Overlay / 手势 / 弹幕 / 字幕 / 续播]
         CoreVideo --> Clip[clip · ClipEngine]
     end
 
@@ -31,13 +31,14 @@ graph TD
         Factory --> ARen[FfmpegAudioRenderer]
         VRen --> JNI[libffmpeg_jni.so JNI]
         ARen --> JNI
+        JNI --> GL[OpenGL ES 2.0 GPU Shader 渲染引擎]
         JNI --> SO[一套 prebuilt libavcodec / avutil / swresample / swscale]
     end
 ```
 
-### 2. Media3 / FFmpeg / JNI 职责划分
+### 2. Media3 / FFmpeg / OpenGL ES GPU 渲染管线
 
-本项目采用 **分轨软解**，不是“整文件交给 FFmpeg 一体播放”。
+本项目采用 **分轨软解 + GPU 硬件着色器加速渲染**：
 
 ```text
 URL / 文件
@@ -62,26 +63,24 @@ URL / 文件
 ┌──────────────────────────────────────────────────────────┐
 │ JNI：libffmpeg_jni.so                                 │
 │  · 把 Java/Kotlin ByteBuffer、Surface 转成 C 可操作内存     │
-│  · 调用 FFmpeg C API（avcodec_send/receive、sws、swr…）     │
-│  · 视频：YUV → VideoDecoderOutputBuffer / Surface           │
+│  · 调用 FFmpeg C API（avcodec_send/receive、swr…）        │
+│  · 🚀 视频：YUV 纹理 → OpenGL ES 2.0 Shader GPU 矩阵转换  │
 │  · 音频：PCM → SimpleDecoderOutputBuffer → AudioSink        │
 └────────────┬─────────────────────────────────────────────┘
              ▼
 ┌──────────────────────────────────────────────────────────┐
 │ FFmpeg 运行时（一套 so，build_ffmpeg.sh 编译）               │
 │  libavcodec / libavutil / libswscale / libswresample …     │
-│  · 真正的压缩码流解码算法                                    │
+│  · 真正的压缩码流高效解码算法                                │
 └──────────────────────────────────────────────────────────┘
 ```
 
-| 层级 | 职责 | 不负责 |
+| 层级 | 职责 | 核心优势 |
 |------|------|--------|
-| **Media3** | 解复用、同步、缓冲、选轨、把 sample 送给 Renderer、PCM 上 AudioTrack、Surface 时序 | 具体压缩算法实现 |
-| **Renderer（Kotlin）** | 实现 Media3 扩展接口；声明支持的 mime；管理 Decoder 生命周期 | 直接操作 FFmpeg C 结构体 |
-| **JNI（`.so`）** | Java ↔ C 桥接；线程/缓冲安全；调用 FFmpeg；像素/PCM 回填 | 播放列表、UI、A/V 同步策略 |
-| **FFmpeg（`libav*`）** | H.264/HEVC/AV1/AAC… 解码与格式转换 | Android 播放器框架 |
-
-一句话：**Media3 管“怎么播”，FFmpeg 管“怎么解”，JNI 是两者之间的桥。**
+| **Media3** | 解复用、同步、缓冲、选轨、把 sample 送给 Renderer、Surface 时序 | 工业级播放控制与生命周期管理 |
+| **Renderer（Kotlin）** | 实现 Media3 扩展接口；管理 Decoder 生命周期与时钟 | 标准 SimpleDecoder / DecoderVideoRenderer 契约 |
+| **JNI + OpenGL ES** | C 语言底层 YUV420P 上传为 GPU 纹理，Fragment Shader 并行转码 | **零 CPU 色彩转换开销、零偏色、零花屏** |
+| **FFmpeg（`libav*`）** | H.264/HEVC/VP9/AV1/AAC… 高性能软件解码 | 覆盖老旧机型与非常规格式 |
 
 ---
 
@@ -90,10 +89,10 @@ URL / 文件
 | 业务板块 | 核心特性 | 技术亮点 |
 | :--- | :--- | :--- |
 | **竖滑 Feed (`feed`)** | 信息流滑动秒播 | Cover / 200ms 防抖起播、底部呼吸灯、`settledPage` 沉降起播、Preload Queue |
-| **沉浸点播 VOD (`vod`)** | 单路沉浸播放 | PiP、手势亮/音、倍速、`VodPlayer` Overlay、双色进度条 |
+| **沉浸点播 VOD (`vod`)** | **7 大工业级点播体验全家桶** | ⚡ **长按 2X 极速快进**（带发光 HUD）<br>🔒 **屏幕锁 / 防误触**<br>⏱️ **记忆播放 / 断点自动续播**<br>🎞️ **进度条拖动时间气泡预览**<br>🎚️ **多清晰度/画质无缝切换** (1080P/720P/480P)<br>💬 **影视级外挂双语字幕 / CC**<br>🚀 **60fps Canvas 高性能防重叠弹幕**<br>📱 **系统级画中画 (PiP Mode)** |
 | **剪辑 Clip (`clip`)** | 裁剪与调参 | `ClipEngine` / `ClipParams` |
-| **FFmpeg (`video-ffmpeg`)** | 自研音视频软解 | **同一套 so** + `FfmpegVideoRenderer` / `FfmpegAudioRenderer`，硬解优先可降级 |
-| **稳定防护** | 生命周期与网络 | `ExoTimeoutException` 防护、断网恢复 |
+| **FFmpeg (`video-ffmpeg`)** | **OpenGL ES GPU 渲染软解** | **同一套 so** + **OpenGL ES 2.0 Shader 硬件加速**，硬解优先，软解兜底 |
+| **稳定防护** | 生命周期与网络 | `ExoTimeoutException` 防护、断网自动镜像切换 |
 
 ---
 
@@ -116,18 +115,23 @@ fun FeedPage(videoUrl: String, feedManager: FeedPlayerManager) {
 }
 ```
 
-### 2. 接入沉浸点播 VOD（Compose）
+### 2. 接入沉浸点播 VOD（Compose 全功能组件）
 
 ```kotlin
 VodPlayer(
     url = videoUrl,
-    title = "Demo",
+    title = "VideoKit 沉浸式点播",
     renderersFactory = FfmpegRenderersFactory(context),
-    onBackClick = onBack
+    speed = 1.0f,
+    onBackClick = onBack,
+    onSpeedClick = { /* 弹出倍速面板 */ },
+    onQualityClick = { /* 弹出画质面板 */ }
 )
 ```
 
-### 3. 启用自研 FFmpeg 音视频软解（方案 B）
+> **注**：`VodPlayer` 内置支持 **长按 2x 快进**、**屏幕防误触锁**、**断点续播提示**、**Canvas 弹幕** 与 **双语字幕**，开箱即用。
+
+### 3. 启用自研 FFmpeg 音视频软解（OpenGL ES 2.0 加速）
 
 ```kotlin
 // 同一 Factory：视频 + 音频均为本模块自研 Renderer，共用 libffmpeg_jni.so
@@ -136,31 +140,27 @@ val renderersFactory = FfmpegRenderersFactory(context)
 val player = ExoPlayer.Builder(context, renderersFactory).build()
 ```
 
-| 轨道 | Renderer | Native |
-|------|----------|--------|
-| Video | `com.kit.video.ffmpeg.FfmpegVideoRenderer` | `ffmpeg_video_jni.cpp` |
-| Audio | `com.kit.video.ffmpeg.FfmpegAudioRenderer` | `ffmpeg_audio_jni.cpp` |
-| FFmpeg 本体 | — | `prebuilt/*/libav*.so`（只一套） |
-| 解复用 / 同步 | ExoPlayer | Media3 |
-
-**不依赖** 官方 `media3-decoder-ffmpeg` 模块，避免第二套 FFmpeg。
+| 轨道 | Renderer | Native | 渲染后端 |
+|------|----------|--------|---------|
+| Video | `com.kit.video.ffmpeg.FfmpegVideoRenderer` | `ffmpeg_video_jni.cpp` | **OpenGL ES 2.0 GPU Shader** |
+| Audio | `com.kit.video.ffmpeg.FfmpegAudioRenderer` | `ffmpeg_audio_jni.cpp` | AudioTrack (PCM) |
+| FFmpeg 本体 | — | `prebuilt/*/libav*.so`（只一套） | LGPL v3.0 合规 |
+| 解复用 / 同步 | ExoPlayer | Media3 | Media3 Extractor |
 
 APK native 布局：
 
 ```text
 lib/arm64-v8a/
   libavcodec.so libavutil.so libswresample.so libswscale.so libavformat.so
-  libffmpeg_jni.so          ← 视频 JNI + 音频 JNI 打在同一库
+  libffmpeg_jni.so          ← 视频 JNI + 音频 JNI + OpenGL ES 渲染引擎 打在同一库
 ```
-
-需要更多音频格式时，在 `build_ffmpeg.sh` 的 `FFMPEG_CONFIG_FLAGS` 数组中取消注释对应 `--enable-decoder=`（如 `ac3` / `eac3` / `dca`），重新编译 prebuilt。注意 DTS 在 FFmpeg 中的名字是 **`dca`**，不是 `dts`。
 
 ---
 
 ## 🛠️ FFmpeg NDK 编译脚本配置指南 (build_ffmpeg.sh)
 
 权威开关列表在脚本内数组 [`build_ffmpeg.sh`](video-ffmpeg/src/main/cpp/scripts/build_ffmpeg.sh) → `FFMPEG_CONFIG_FLAGS`。  
-使用 **`--disable-everything` + 按行 enable**：行首加/去 `#` 才真正关闭/打开对应功能（旧版写在 `configure \` 续行里的 `#` 会被 bash 打断，已废弃）。
+使用 **`--disable-everything` + 按行 enable**：行首加/去 `#` 才真正关闭/打开对应功能。
 
 ### 1. 运行编译脚本
 
@@ -182,16 +182,6 @@ chmod +x build_ffmpeg.sh
 | demuxer | mov/matroska/flv | 容器拆轨（播放主路径仍是 Media3 Extractor） |
 | bsf / muxer / encoder / network / mediacodec | 默认注释 | 导出、FFmpeg 自拉流、硬解加速等按需开 |
 | 合规 | `--disable-gpl --enable-version3` | LGPL 分发；勿开 GPL/`nonfree` 除非清楚后果 |
-
-示例（在脚本数组中改，不要再抄到 `configure \` 续行里）：
-
-```bash
---enable-decoder=h264                 # H.264/AVC：MP4、HLS
-# --enable-decoder=ac3                # Dolby AC-3：取消行首 # 即编入
-# --enable-decoder=dca                # DTS（FFmpeg 名 dca）
-```
-
-改完后重新跑脚本，再 `./gradlew :video-ffmpeg:assembleDebug`。
 
 ---
 

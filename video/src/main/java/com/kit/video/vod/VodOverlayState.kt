@@ -1,7 +1,7 @@
 package com.kit.video.vod
 
 /**
- * VOD Overlay 展示状态（与具体业务无关，方便宿主绑定）。
+ * 工业级 VOD Overlay 控制层状态
  */
 data class VodOverlayState(
     val title: String = "",
@@ -17,5 +17,13 @@ data class VodOverlayState(
     /** 播放器内部记录的全屏态（影响全屏图标） */
     val isFullscreen: Boolean = false,
     val isHardwareDecoder: Boolean = true,
-    val showDecoderBadge: Boolean = true
+    val showDecoderBadge: Boolean = true,
+    // 工业级新增特性
+    val isLocked: Boolean = false,
+    val isLongPressing2x: Boolean = false,
+    val danmakuEnabled: Boolean = true,
+    val subtitleEnabled: Boolean = true,
+    val currentQualityName: String = "1080P",
+    val activeSubtitle: SubtitleItem? = null,
+    val activeDanmakus: List<ActiveDanmaku> = emptyList()
 )
