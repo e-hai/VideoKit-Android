@@ -283,31 +283,44 @@ fun VodPlayer(
     Box(
         modifier = modifier
             .fillMaxSize()
-            // 🚀 Compose 顶层精准长按 2X 快进手势捕获：按住 380ms 触发 2.0x，松手立即恢复原速
+            // 🚀 Compose 顶层精准长按 2X 快进手势捕获：按住 400ms 触发 2.0x，松手立即恢复原速
             .pointerInput(isLocked, basePlaybackSpeed) {
                 if (isLocked) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    val pointerId = down.id
+                    var isSpeedingUp = false
                     try {
-                        withTimeout(380L) {
-                            waitForUpOrCancellation()
+                        withTimeout(400L) {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == pointerId }
+                                if (change == null || !change.pressed) {
+                                    // 400ms 内手指已经抬起，这是普通点击，不触发加速
+                                    return@withTimeout
+                                }
+                            }
                         }
                     } catch (e: TimeoutCancellationException) {
-                        // 超过 380ms 确认为长按，立即进入 2.0X 极速快进
+                        // 超过 400ms 持续按住，触发 2.0X 极速快进
+                        isSpeedingUp = true
                         isLongPressing2x = true
                         playerView?.setSpeed(2.0f)
 
-                        // 持续跟踪触摸状态，直到所有手指抬起或取消
+                        // 持续监听直到该触控点离开屏幕
                         while (true) {
                             val event = awaitPointerEvent()
-                            val anyPressed = event.changes.any { it.pressed }
-                            if (!anyPressed) {
+                            val change = event.changes.firstOrNull { it.id == pointerId }
+                            if (change == null || !change.pressed) {
                                 break
                             }
                         }
-                        // 手指松开，微秒级恢复原速并关闭 HUD
-                        isLongPressing2x = false
-                        playerView?.setSpeed(basePlaybackSpeed)
+                    } finally {
+                        // 无论何种情况退出（正常松手、取消、异常），只要开启过加速，必定微秒级恢复原速
+                        if (isSpeedingUp) {
+                            isLongPressing2x = false
+                            playerView?.setSpeed(basePlaybackSpeed)
+                        }
                     }
                 }
             }
@@ -326,16 +339,6 @@ fun VodPlayer(
                     onSingleTapListener = {
                         if (!currentIsInPipMode) {
                             isControlsVisible = !isControlsVisible
-                        }
-                    }
-                    onLongPressChangedListener = { isPressing ->
-                        if (!isLocked) {
-                            isLongPressing2x = isPressing
-                            if (isPressing) {
-                                setSpeed(2.0f)
-                            } else {
-                                setSpeed(basePlaybackSpeed)
-                            }
                         }
                     }
                     onOrientationChangedListener = { landscape ->
@@ -358,16 +361,6 @@ fun VodPlayer(
                 view.onSingleTapListener = {
                     if (!currentIsInPipMode) {
                         isControlsVisible = !isControlsVisible
-                    }
-                }
-                view.onLongPressChangedListener = { isPressing ->
-                    if (!isLocked) {
-                        isLongPressing2x = isPressing
-                        if (isPressing) {
-                            view.setSpeed(2.0f)
-                        } else {
-                            view.setSpeed(basePlaybackSpeed)
-                        }
                     }
                 }
                 view.onOrientationChangedListener = { landscape ->
