@@ -85,16 +85,15 @@ object VideoCacheManager {
      */
     fun createMediaSourceFactory(context: Context): DefaultMediaSourceFactory {
         val dataSourceFactory = getCacheDataSourceFactory(context)
-        return DefaultMediaSourceFactory(dataSourceFactory)
+        return DefaultMediaSourceFactory(context.applicationContext).setDataSourceFactory(dataSourceFactory)
     }
 
     /**
-     * 为指定 URI 创建具备磁盘缓存特性的 ProgressiveMediaSource
+     * 为指定 URI 创建具备磁盘缓存特性的自适应 MediaSource (完美支持 MP4 / HLS / DASH / WebM)
      */
     fun createMediaSource(context: Context, uri: Uri): MediaSource {
-        val factory = getCacheDataSourceFactory(context)
         val mediaItem = MediaItem.fromUri(uri)
-        return ProgressiveMediaSource.Factory(factory).createMediaSource(mediaItem)
+        return createMediaSourceFactory(context).createMediaSource(mediaItem)
     }
 
     /**
