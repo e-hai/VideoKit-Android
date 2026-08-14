@@ -58,7 +58,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.e-hai.VideoKit'
                 artifactId = 'video-ffmpeg'
-                version = '1.0.0'
+                version = project.version != 'unspecified' ? project.version : 'latest'
             }
         }
     }

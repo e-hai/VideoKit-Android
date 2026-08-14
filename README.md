@@ -26,15 +26,15 @@ dependencyResolutionManagement {
 ```
 
 ### 2. 引入对应模块
-在宿主 App 模块的 `build.gradle` 中按需添加依赖：
+在宿主 App 模块的 `build.gradle` 中按需添加依赖（将 `Tag` 替换为顶部 [![JitPack](https://jitpack.io/v/e-hai/VideoKit.svg)](https://jitpack.io/#e-hai/VideoKit) 徽章显示的最新发布版本，如 `v1.0.0` 或 `master-SNAPSHOT`）：
 
 ```groovy
 dependencies {
     // 1. 【核心 SDK】包含 Feed 竖滑、VOD 点播、Clip 剪辑、1GB LRU 缓存与双向预加载
-    implementation 'com.github.e-hai.VideoKit:video:v1.0.0'
+    implementation 'com.github.e-hai.VideoKit:video:Tag'
 
     // 2. 【可选 · FFmpeg 独立软解扩展库】包含 OpenGL ES 3.0 GPU 着色器软解渲染器与 arm64-v8a 动态库
-    implementation 'com.github.e-hai.VideoKit:video-ffmpeg:v1.0.0'
+    implementation 'com.github.e-hai.VideoKit:video-ffmpeg:Tag'
 }
 ```
 
