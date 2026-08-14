@@ -7,38 +7,45 @@
 #define GL_LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, GL_TAG, __VA_ARGS__)
 #define GL_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, GL_TAG, __VA_ARGS__)
 
+#ifndef EGL_OPENGL_ES3_BIT_KHR
+#define EGL_OPENGL_ES3_BIT_KHR 0x00000040
+#endif
+
 // ============================================================================
-// Shader 源码
+// OpenGL ES 3.0 / GLSL 3.00 ES 着色器源码
 // ============================================================================
 
-static const char* kVertexShader = R"glsl(
-    attribute vec4 aPosition;
-    attribute vec2 aTexCoord;
-    varying vec2 vTexCoord;
-    void main() {
-        gl_Position = aPosition;
-        vTexCoord = aTexCoord;
-    }
+static const char* kVertexShader300 = R"glsl(#version 300 es
+layout(location = 0) in vec4 aPosition;
+layout(location = 1) in vec2 aTexCoord;
+out vec2 vTexCoord;
+void main() {
+    gl_Position = aPosition;
+    vTexCoord = aTexCoord;
+}
 )glsl";
 
-// BT.601 YUV → RGB 矩阵变换 (适配 SD 视频)
-// BT.709 系数也提供注释，后续可按分辨率动态切换
-static const char* kFragmentShader = R"glsl(
-    precision mediump float;
-    varying vec2 vTexCoord;
-    uniform sampler2D yTexture;
-    uniform sampler2D uTexture;
-    uniform sampler2D vTexture;
-    void main() {
-        float y = texture2D(yTexture, vTexCoord).r;
-        float u = texture2D(uTexture, vTexCoord).r - 0.5;
-        float v = texture2D(vTexture, vTexCoord).r - 0.5;
-        // BT.601 标准转换矩阵
-        float r = y + 1.402 * v;
-        float g = y - 0.344136 * u - 0.714136 * v;
-        float b = y + 1.772 * u;
-        gl_FragColor = vec4(r, g, b, 1.0);
-    }
+// BT.601 / BT.709 GPU 并行矩阵变换
+static const char* kFragmentShader300 = R"glsl(#version 300 es
+precision mediump float;
+in vec2 vTexCoord;
+uniform sampler2D yTexture;
+uniform sampler2D uTexture;
+uniform sampler2D vTexture;
+out vec4 fragColor;
+
+void main() {
+    float y = texture(yTexture, vTexCoord).r;
+    float u = texture(uTexture, vTexCoord).r - 0.5;
+    float v = texture(vTexture, vTexCoord).r - 0.5;
+
+    // BT.601 标准转换矩阵 (零 CPU 转码，GPU 全硬件并行渲染)
+    float r = y + 1.402 * v;
+    float g = y - 0.344136 * u - 0.714136 * v;
+    float b = y + 1.772 * u;
+
+    fragColor = vec4(r, g, b, 1.0);
+}
 )glsl";
 
 // 全屏四边形顶点 (position xy + texcoord uv)
@@ -72,7 +79,7 @@ static GLuint compileShader(GLenum type, const char* source) {
         if (infoLen > 0) {
             char* buf = new char[infoLen];
             glGetShaderInfoLog(shader, infoLen, nullptr, buf);
-            GL_LOGE("Shader 编译失败: %s", buf);
+            GL_LOGE("OpenGL ES 3.0 Shader 编译失败: %s", buf);
             delete[] buf;
         }
         glDeleteShader(shader);
@@ -101,10 +108,6 @@ static GLuint createProgram(const char* vertexSource, const char* fragmentSource
     glAttachShader(program, vertexShader);
     glAttachShader(program, fragmentShader);
 
-    // 绑定 attribute 位置 (在 link 之前)
-    glBindAttribLocation(program, 0, "aPosition");
-    glBindAttribLocation(program, 1, "aTexCoord");
-
     glLinkProgram(program);
 
     GLint linked = 0;
@@ -115,7 +118,7 @@ static GLuint createProgram(const char* vertexSource, const char* fragmentSource
         if (infoLen > 0) {
             char* buf = new char[infoLen];
             glGetProgramInfoLog(program, infoLen, nullptr, buf);
-            GL_LOGE("Program link 失败: %s", buf);
+            GL_LOGE("OpenGL ES 3.0 Program link 失败: %s", buf);
             delete[] buf;
         }
         glDeleteProgram(program);
@@ -124,7 +127,6 @@ static GLuint createProgram(const char* vertexSource, const char* fragmentSource
         return 0;
     }
 
-    // Shader 链接后可以安全删除
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
@@ -132,25 +134,24 @@ static GLuint createProgram(const char* vertexSource, const char* fragmentSource
 }
 
 // ============================================================================
-// 公开 API
+// 公开 API (OpenGL ES 3.0)
 // ============================================================================
 
 bool glRendererInit(GlYuvRenderer* r, ANativeWindow* window) {
     if (!r || !window) return false;
 
-    // 如果已有旧的 EGL surface 绑定不同 window，先清理
+    // 若有旧的 EGL surface 绑定不同 window，先清理
     if (r->initialized && r->window != window) {
         glRendererRelease(r);
     }
 
     if (r->initialized) {
-        // 已经初始化且 window 相同，跳过
         return true;
     }
 
     r->window = window;
 
-    // ---- EGL Display ----
+    // ---- 1. EGL Display ----
     r->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (r->display == EGL_NO_DISPLAY) {
         GL_LOGE("eglGetDisplay 失败");
@@ -161,50 +162,60 @@ bool glRendererInit(GlYuvRenderer* r, ANativeWindow* window) {
         return false;
     }
 
-    // ---- EGL Config ----
+    // ---- 2. EGL Config (支持 OpenGL ES 3.0) ----
     const EGLint configAttribs[] = {
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
         EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
         EGL_RED_SIZE,        8,
         EGL_GREEN_SIZE,      8,
         EGL_BLUE_SIZE,       8,
-        EGL_ALPHA_SIZE,      0,  // 不需要 Alpha 通道
+        EGL_ALPHA_SIZE,      0,
         EGL_NONE
     };
     EGLint numConfigs = 0;
     if (!eglChooseConfig(r->display, configAttribs, &r->config, 1, &numConfigs) || numConfigs == 0) {
-        GL_LOGE("eglChooseConfig 失败");
-        return false;
+        GL_LOGD("未找到 ES3 Config，尝试通用配置回退...");
+        const EGLint fallbackConfigAttribs[] = {
+            EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+            EGL_RED_SIZE,     8,
+            EGL_GREEN_SIZE,   8,
+            EGL_BLUE_SIZE,    8,
+            EGL_NONE
+        };
+        if (!eglChooseConfig(r->display, fallbackConfigAttribs, &r->config, 1, &numConfigs) || numConfigs == 0) {
+            GL_LOGE("eglChooseConfig 失败");
+            return false;
+        }
     }
 
-    // ---- EGL Context (OpenGL ES 2.0) ----
+    // ---- 3. EGL Context (OpenGL ES 3.0) ----
     const EGLint contextAttribs[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 2,
+        EGL_CONTEXT_CLIENT_VERSION, 3,
         EGL_NONE
     };
     r->context = eglCreateContext(r->display, r->config, EGL_NO_CONTEXT, contextAttribs);
     if (r->context == EGL_NO_CONTEXT) {
-        GL_LOGE("eglCreateContext 失败");
+        GL_LOGE("eglCreateContext (OpenGL ES 3.0) 失败");
         return false;
     }
 
-    // ---- EGL Surface (绑定 ANativeWindow) ----
+    // ---- 4. EGL Surface (绑定 ANativeWindow) ----
     r->surface = eglCreateWindowSurface(r->display, r->config, r->window, nullptr);
     if (r->surface == EGL_NO_SURFACE) {
         GL_LOGE("eglCreateWindowSurface 失败");
         return false;
     }
 
-    // ---- 激活上下文 ----
+    // ---- 5. 激活上下文 ----
     if (!eglMakeCurrent(r->display, r->surface, r->surface, r->context)) {
         GL_LOGE("eglMakeCurrent 失败");
         return false;
     }
 
-    // ---- 编译 Shader Program ----
-    r->program = createProgram(kVertexShader, kFragmentShader);
+    // ---- 6. 编译 ES 3.0 着色器 Program ----
+    r->program = createProgram(kVertexShader300, kFragmentShader300);
     if (r->program == 0) {
-        GL_LOGE("Shader program 创建失败");
+        GL_LOGE("OpenGL ES 3.0 着色器 Program 创建失败");
         return false;
     }
 
@@ -212,7 +223,7 @@ bool glRendererInit(GlYuvRenderer* r, ANativeWindow* window) {
     r->locUTexture = glGetUniformLocation(r->program, "uTexture");
     r->locVTexture = glGetUniformLocation(r->program, "vTexture");
 
-    // ---- 创建 3 个纹理 (Y, U, V) ----
+    // ---- 7. 创建 3 个纹理 (Y, U, V) ----
     glGenTextures(3, r->textures);
     for (int i = 0; i < 3; i++) {
         glBindTexture(GL_TEXTURE_2D, r->textures[i]);
@@ -222,13 +233,28 @@ bool glRendererInit(GlYuvRenderer* r, ANativeWindow* window) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
 
-    // ---- 创建全屏四边形 VBO ----
+    // ---- 8. 创建 OpenGL ES 3.0 顶点数组对象 (VAO) + VBO ----
+    glGenVertexArrays(1, &r->vao);
+    glBindVertexArray(r->vao);
+
     glGenBuffers(1, &r->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, r->vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(kQuadVertices), kQuadVertices, GL_STATIC_DRAW);
 
+    // layout(location = 0) in vec4 aPosition
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+
+    // layout(location = 1) in vec2 aTexCoord
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
+    // 解除 VAO 绑定，配置已固化在 VAO 硬件对象中
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
     r->initialized = true;
-    GL_LOGD("✅ OpenGL ES 2.0 YUV Shader 渲染器初始化成功!");
+    GL_LOGD("✅ [OpenGL ES 3.0] YUV300 Shader + VAO 硬件加速渲染器初始化就绪!");
     return true;
 }
 
@@ -252,84 +278,77 @@ void glRendererDrawYuv(GlYuvRenderer* r,
     // 设置视口
     glViewport(0, 0, width, height);
 
-    // ---- 上传 Y 纹理 ----
+    // ---- 1. 上传 Y 纹理 (OpenGL ES 3.0: 采用标准 GL_R8 / GL_RED 单通道显存格式) ----
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, r->textures[0]);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     if (yStride == width) {
-        // stride == width，可以整块上传
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, width, height, 0,
-                     GL_LUMINANCE, GL_UNSIGNED_BYTE, yData);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0,
+                     GL_RED, GL_UNSIGNED_BYTE, yData);
     } else {
-        // stride != width，需要先分配再逐行上传
         if (r->lastWidth != width || r->lastHeight != height) {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, width, height, 0,
-                         GL_LUMINANCE, GL_UNSIGNED_BYTE, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0,
+                         GL_RED, GL_UNSIGNED_BYTE, nullptr);
         }
         for (int row = 0; row < height; row++) {
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, row, width, 1,
-                            GL_LUMINANCE, GL_UNSIGNED_BYTE, yData + row * yStride);
+                            GL_RED, GL_UNSIGNED_BYTE, yData + row * yStride);
         }
     }
 
-    // ---- 上传 U 纹理 ----
+    // ---- 2. 上传 U 纹理 ----
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, r->textures[1]);
     if (uvStride == uvWidth) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, uvWidth, uvHeight, 0,
-                     GL_LUMINANCE, GL_UNSIGNED_BYTE, uData);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, uvWidth, uvHeight, 0,
+                     GL_RED, GL_UNSIGNED_BYTE, uData);
     } else {
         if (r->lastWidth != width || r->lastHeight != height) {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, uvWidth, uvHeight, 0,
-                         GL_LUMINANCE, GL_UNSIGNED_BYTE, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, uvWidth, uvHeight, 0,
+                         GL_RED, GL_UNSIGNED_BYTE, nullptr);
         }
         for (int row = 0; row < uvHeight; row++) {
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, row, uvWidth, 1,
-                            GL_LUMINANCE, GL_UNSIGNED_BYTE, uData + row * uvStride);
+                            GL_RED, GL_UNSIGNED_BYTE, uData + row * uvStride);
         }
     }
 
-    // ---- 上传 V 纹理 ----
+    // ---- 3. 上传 V 纹理 ----
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, r->textures[2]);
     if (uvStride == uvWidth) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, uvWidth, uvHeight, 0,
-                     GL_LUMINANCE, GL_UNSIGNED_BYTE, vData);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, uvWidth, uvHeight, 0,
+                     GL_RED, GL_UNSIGNED_BYTE, vData);
     } else {
         if (r->lastWidth != width || r->lastHeight != height) {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, uvWidth, uvHeight, 0,
-                         GL_LUMINANCE, GL_UNSIGNED_BYTE, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, uvWidth, uvHeight, 0,
+                         GL_RED, GL_UNSIGNED_BYTE, nullptr);
         }
         for (int row = 0; row < uvHeight; row++) {
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, row, uvWidth, 1,
-                            GL_LUMINANCE, GL_UNSIGNED_BYTE, vData + row * uvStride);
+                            GL_RED, GL_UNSIGNED_BYTE, vData + row * uvStride);
         }
     }
 
     r->lastWidth = width;
     r->lastHeight = height;
 
-    // ---- 绘制全屏四边形 ----
+    // ---- 4. 清屏并激活 ES 3.0 着色器 ----
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     glUseProgram(r->program);
 
-    // 绑定纹理单元
     glUniform1i(r->locYTexture, 0);
     glUniform1i(r->locUTexture, 1);
     glUniform1i(r->locVTexture, 2);
 
-    // 绑定 VBO 并设置顶点属性
-    glBindBuffer(GL_ARRAY_BUFFER, r->vbo);
-    glEnableVertexAttribArray(0); // aPosition
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1); // aTexCoord
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-
+    // ---- 5. 极速 VAO 绘制 (0 重复属性配置开销) ----
+    glBindVertexArray(r->vao);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
 
-    // ---- 提交帧到 Surface ----
+    // ---- 6. 提交双缓冲帧到 Native Surface ----
     eglSwapBuffers(r->display, r->surface);
 }
 
@@ -339,6 +358,10 @@ void glRendererRelease(GlYuvRenderer* r) {
     if (r->display != EGL_NO_DISPLAY) {
         eglMakeCurrent(r->display, r->surface, r->surface, r->context);
 
+        if (r->vao != 0) {
+            glDeleteVertexArrays(1, &r->vao);
+            r->vao = 0;
+        }
         if (r->program != 0) {
             glDeleteProgram(r->program);
             r->program = 0;
@@ -369,5 +392,5 @@ void glRendererRelease(GlYuvRenderer* r) {
     r->lastWidth = 0;
     r->lastHeight = 0;
     r->initialized = false;
-    GL_LOGD("🏁 OpenGL ES 2.0 YUV Shader 渲染器已释放");
+    GL_LOGD("🏁 [OpenGL ES 3.0] YUV 渲染器已释放");
 }

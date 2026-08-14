@@ -54,9 +54,9 @@ VideoKit/
   - 必须在 `VodPlayerView` 的 `ON_PAUSE` 中拦截检查 `!activity.isInPictureInPictureMode` 才允许 pause，保证小窗 0 暂停持续播放；
   - 使用 `RemoteAction` + `PendingIntent` 向系统小窗下发【▶ 播放 / ❚❚ 暂停】控件。
 
-### 2.4 FFmpeg NDK 软解与 OpenGL ES 2.0 GPU 着色器渲染
+### 2.4 FFmpeg NDK 软解与 OpenGL ES 3.0 GPU 着色器渲染
 - **独立解耦模块 `:video-ffmpeg`**：将 C/C++ NDK、CMake 及 JNI (`libffmpeg_jni.so`，含视频/音频桥接) 独立成模块，按需引入，杜绝核心包体积虚胖；
-- **🚀 OpenGL ES 2.0 GPU Shader 渲染**：彻底废弃 CPU 软件 `sws_scale` 像素转换，采用 Native EGL + GPU 着色器对 YUV420P 纹理进行矩阵并行计算渲染，**CPU 占用骤降 500%、零偏色、零花屏**；
+- **🚀 OpenGL ES 3.0 GPU Shader 渲染**：彻底废弃 CPU 软件 `sws_scale` 像素转换，采用 Native EGL + OpenGL ES 3.0 (GLSL 3.00 ES + VAO 硬件加速 + `GL_R8`/`GL_RED` 显存格式) 对 YUV420P 纹理进行矩阵并行计算渲染，**CPU 占用骤降 500%、零偏色、零花屏**；
 - **ANativeWindow 线程安全锁**：JNI 层监听 Surface 生命周期，防止 Surface 销毁后继续渲染引发崩溃；
 - **LGPL 协议合规**：编译脚本指定 `--disable-gpl --enable-version3`，杜绝商业版权风险；
 - **软硬解无缝降级**：优先使用系统 MediaCodec 硬解，硬解异常时自动降级使用 FFmpeg 软解。

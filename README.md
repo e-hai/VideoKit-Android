@@ -31,7 +31,7 @@ graph TD
         Factory --> ARen[FfmpegAudioRenderer]
         VRen --> JNI[libffmpeg_jni.so JNI]
         ARen --> JNI
-        JNI --> GL[OpenGL ES 2.0 GPU Shader 渲染引擎]
+        JNI --> GL[OpenGL ES 3.0 GPU Shader 渲染引擎 (VAO + GL_R8)]
         JNI --> SO[一套 prebuilt libavcodec / avutil / swresample / swscale]
     end
 ```
