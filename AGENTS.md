@@ -1,22 +1,26 @@
-# VideoKit Agent Guidance (AGENTS.md)
+# VideoKit-Android Agent Guidance (AGENTS.md)
 
-`VideoKit` 是一个基于 **Android Jetpack Compose** + **AndroidX Media3 (ExoPlayer)** 构建的工业级 Android 音视频解决方案全家桶。
+`VideoKit-Android` 是一个基于 **Android Jetpack Compose** + **AndroidX Media3 (ExoPlayer)** 构建的工业级 Android 音视频解决方案全家桶。
 
 ---
 
 ## 1. 模块化架构划分 (Module Architecture)
 
-系统被划分为宿主 App 模块、视频核心库和 FFmpeg NDK 软解扩展模块：
+系统被划分为宿主 App 示例模块、视频核心 SDK 库和 FFmpeg NDK 独立软解扩展模块：
 
 ```
-VideoKit/
+VideoKit-Android/
 ├── sample/                # Single-Activity (MainActivity) + Compose 多路由 App 示例模块
-├── video/                 # VideoKit Core SDK 核心库
+├── video/                 # VideoKit Core SDK 核心库 (发布物: com.github.e-hai.VideoKit-Android:video)
 │   └── com.kit.video/
-│       ├── feed/          # 竖滑信息流 Feed（Cover / Preload / Breathing Line / Pager Settlement）
+│       ├── feed/          # 竖滑信息流 Feed（Cover / Preload / Breathing Line / Pager Settlement / MicroProgressBar）
 │       ├── vod/           # 沉浸点播 VOD（Overlay / Gestures / Speed / PiP / Danmaku / Subtitles / Quality / Resume / Lock）
-│       └── clip/          # 剪辑调参 Clip（ClipEngine / Timeline）
-└── video-ffmpeg/          # 【独立软解扩展库】FFmpeg C/C++ NDK JNI + OpenGL ES 2.0 GPU 着色器软解渲染器 (FfmpegVideoRenderer)
+│       ├── clip/          # 剪辑调参 Clip（ClipEngine / ClipParams / Timeline）
+│       ├── cache/         # 1GB LRU 磁盘缓存池与双向预拉取 (VideoCacheManager)
+│       └── ui/            # 高阶播放控件 (PremiumBufferSlider 等)
+└── video-ffmpeg/          # 【独立软解扩展库】(发布物: com.github.e-hai.VideoKit-Android:video-ffmpeg)
+    ├── src/main/cpp/      # FFmpeg C/C++ NDK JNI + OpenGL ES 3.0 GPU 着色器软解渲染器 (libffmpeg_jni.so)
+    └── src/main/java/     # FfmpegRenderersFactory / FfmpegVideoRenderer / FfmpegAudioRenderer
 ```
 
 ---
@@ -24,18 +28,19 @@ VideoKit/
 ## 2. 关键核心设计与踩坑防护 (Key Mechanisms & Caveats)
 
 ### 2.1 ExoPlayer 生命周期安全 (ExoTimeoutException Mitigation)
-- **踩坑点**：在 Activity/Compose 的 `ON_PAUSE` 或 `ON_STOP` 生命周期中频繁调用 `player.release()` 会导致 MediaCodec 硬件解码器或网络 I/O 阻塞主线程，抛出致命 `ExoTimeoutException: Player release timed out` 崩溃。
-- **最佳实践**：
-  - 在 `ON_PAUSE` / `ON_STOP` 时，仅触发 `player.pause()`。
-  - 仅在 `ON_DESTROY` 时调用 `player.release()`，并使用 `try-catch` 包裹。
+- **踩坑点**：在 Activity/Compose 的 `ON_PAUSE` 或 `ON_STOP` 生命周期中频繁调用 `player.release()` 会导致 MediaCodec 硬件解码器或网络 I/O 阻塞主线程超过数千毫秒，抛出致命崩溃 `ExoTimeoutException: Player release timed out`。
+- **防护规范**：
+  - 在 `ON_PAUSE` / `ON_STOP` 时，**仅触发 `player.pause()`**；
+  - 仅在 `ON_DESTROY` 时调用 `player.release()`，并使用 `try-catch` 包裹保障容灾；
+  - 画中画 (PiP) 模式下，切桌面必须在 `ON_PAUSE` 拦截 `!activity.isInPictureInPictureMode` 避免中断小窗播放。
 
 ### 2.2 竖滑 Feed 极速起播 (Feed Smooth Swiping)
-- **Pager 状态与起播解耦**：切勿在 Compose `VerticalPager` 滑动过程中 (`isScrollInProgress == true`) 触发 `setMediaSource` 或 `prepare()`，否则将导致严重掉帧。
+- **Pager 状态与起播解耦**：切勿在 Compose `VerticalPager` 滑动过程中 (`isScrollInProgress == true`) 触发 `setMediaSource` 或 `prepare()`，否则将引发严重丢帧卡顿。
 - **settledPage 防抖**：必须在 `LaunchedEffect(pagerState.settledPage, pagerState.isScrollInProgress)` 中校验 `!isScrollInProgress` 且 `settledPage != lastPlayedPage` 时才发起起播。
 - **两阶段加载视觉**：
-  - **首帧渲染前**：显示封面 Cover + 居中 Loading 圈（且包含 200ms 防抖延时，防止网速极快时闪烁）；
+  - **首帧渲染前**：显示封面 Cover + 居中 Loading 圈（且包含 200ms 防抖延时，防止高速网络下闪烁）；
   - **播放中二次缓冲**：隐藏居中圈，启动底部 GPU 硬件加速发光呼吸灯 (`bottomBreathingView`)，保持视频画面中央 0 遮挡。
-- **🚀 工业级双向预加载队列 (Bidirectional Preload Queue)**：在起播当前 `page` 时，后台异步线程使用 `CacheWriter` 提前将下一个视频 `page + 1` 与上一个视频 `page - 1` 的前 2MB 数据静默下载至 1GB LRU 磁盘缓存 (`VideoCacheManager`)，实现上下双向切页 0ms 闪电秒播。
+- **🚀 工业级双向预加载队列 (Bidirectional Preload Queue)**：在起播当前 `page` 时，后台异步线程使用 `CacheWriter` 提前将下一个视频 `page + 1` 与上一个视频 `page - 1` 的前 2MB 数据静默拉取至 1GB LRU 磁盘缓存 (`VideoCacheManager`)，实现上下双向切页 0ms 闪电秒播。
 - **🎞️ 抖音级底部微型拖拽进度条 (`FeedMicroProgressBar`)**：常态 2dp 极细微纯白线，按压/拖拽时平滑粗化至 6dp，浮现高光 Thumb 并跟随时间胶囊气泡（如 `00:15 / 00:45`），松手准时 Seek。
 - **⏸️ 单击暂停/播放与居中大图标**：单击视频任意位置切换暂停/播放，暂停时中央浮现半透明大播放图标。
 
@@ -53,8 +58,8 @@ VideoKit/
 - **🚀 60fps Canvas 高性能弹幕系统**：基于 Compose Canvas 实现 60fps 防重叠滚动弹幕，支持实时发送与开关。
 - **系统级画中画 (Picture-in-Picture)**：
   - 当处于 `AppScreen.Vod` 时按 Home 键切桌面，Activity 触发 `onUserLeaveHint()` 唤起 `enterPictureInPictureMode`；
-  - 必须在 `VodPlayerView` 的 `ON_PAUSE` 中拦截检查 `!activity.isInPictureInPictureMode` 才允许 pause，保证小窗 0 暂停持续播放；
-  - 使用 `RemoteAction` + `PendingIntent` 向系统小窗下发【▶ 播放 / ❚❚ 暂停】控件。
+  - 必须在 `VodPlayerView` 的 `ON_PAUSE` 中拦截检查 `!activity.isInPictureInPictureMode` 才允许 pause，保证小窗持续播放；
+  - 使用 `RemoteAction` + `PendingIntent` 向系统小窗下发【▶ 播放 / ❚❚ 暂停】系统控件。
 
 ### 2.4 FFmpeg NDK 软解与 OpenGL ES 3.0 GPU 着色器渲染
 - **独立解耦模块 `:video-ffmpeg`**：将 C/C++ NDK、CMake 及 JNI (`libffmpeg_jni.so`，含视频/音频桥接) 独立成模块，按需引入，杜绝核心包体积虚胖；
@@ -65,11 +70,14 @@ VideoKit/
 
 ---
 
-## 3. 构建与验证指令
+## 3. 依赖分发与构建指令 (Build & Release)
 
 ```bash
-# 全量编译构建 (包含 sample, video, video-ffmpeg 多模块)
+# 全量编译构建 (包含 sample, video, video-ffmpeg 全部模块)
 ./gradlew assembleDebug
+
+# 本地 Maven 发布验证
+./gradlew :video:publishReleasePublicationToMavenLocal :video-ffmpeg:publishReleasePublicationToMavenLocal
 
 # 增量清理构建
 ./gradlew clean assembleDebug

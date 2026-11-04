@@ -56,9 +56,9 @@ afterEvaluate {
         publications {
             release(MavenPublication) {
                 from components.release
-                groupId = 'com.github.e-hai.VideoKit'
+                groupId = 'com.github.e-hai.VideoKit-Android'
                 artifactId = 'video-ffmpeg'
-                version = project.version != 'unspecified' ? project.version : 'latest'
+                version = project.version != 'unspecified' ? project.version : '1.0.0'
             }
         }
     }
