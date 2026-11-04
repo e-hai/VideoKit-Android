@@ -1,5 +1,6 @@
 # VideoKit-Android 🎬
 
+[![Release](https://img.shields.io/github/v/release/e-hai/VideoKit-Android?color=blue&label=Release)](https://github.com/e-hai/VideoKit-Android/releases)
 [![JitPack](https://jitpack.io/v/e-hai/VideoKit-Android.svg)](https://jitpack.io/#e-hai/VideoKit-Android)
 [![Android AGP](https://img.shields.io/badge/AGP-9.3.1-brightgreen.svg)](https://developer.android.com/studio/releases/gradle-plugin)
 [![Gradle](https://img.shields.io/badge/Gradle-9.5.0-blue.svg)](https://gradle.org)
@@ -17,60 +18,50 @@
 ### 1. 独立解耦多模块系统架构
 
 ```mermaid
-graph TD
-    App[宿主 App · Jetpack Compose / Activity] --> CoreVideo[video 核心 SDK - Feed / VOD / Clip / Cache]
-    App -. 按需引入 .-> FFmpegModule[video-ffmpeg 独立软解扩展模块]
+flowchart TD
+    App["宿主 App (Jetpack Compose / Activity)"] --> CoreVideo["video 核心 SDK (Feed / VOD / Clip / Cache)"]
+    App -. 按需引入 .-> FFmpegModule["video-ffmpeg 独立软解扩展模块"]
 
-    subgraph video 核心能力
-        CoreVideo --> Feed[Feed 竖滑流 · FeedCoverPlayerView + PreloadQueue + MicroProgressBar]
-        CoreVideo --> Vod[VOD 沉浸点播 · 手势 HUD / 2X 快进 / 弹幕 / 双语字幕 / 断点续播 / 锁屏]
-        CoreVideo --> Clip[Clip 剪辑 · ClipEngine 调参 / 裁剪]
-        CoreVideo --> Cache[Cache 缓存 · 1GB LRU 本地磁盘池 + 边播边存]
+    subgraph Core ["video 核心能力"]
+        CoreVideo --> Feed["Feed 竖滑流 (FeedCoverPlayerView + PreloadQueue + MicroProgressBar)"]
+        CoreVideo --> Vod["VOD 沉浸点播 (手势 HUD / 2X 快进 / 弹幕 / 双语字幕 / 断点续播 / 锁屏)"]
+        CoreVideo --> Clip["Clip 剪辑 (ClipEngine 调参 / 裁剪)"]
+        CoreVideo --> Cache["Cache 缓存 (1GB LRU 本地磁盘池 + 边播边存)"]
     end
 
-    subgraph video-ffmpeg 独立软解模块
-        FFmpegModule --> Factory[FfmpegRenderersFactory 扩展渲染工厂]
-        Factory --> VRen[FfmpegVideoRenderer 视频软解器]
-        Factory --> ARen[FfmpegAudioRenderer 音频软解器]
-        VRen --> JNI[libffmpeg_jni.so JNI 桥接]
+    subgraph SoftCodec ["video-ffmpeg 独立软解模块"]
+        FFmpegModule --> Factory["FfmpegRenderersFactory 扩展渲染工厂"]
+        Factory --> VRen["FfmpegVideoRenderer 视频软解器"]
+        Factory --> ARen["FfmpegAudioRenderer 音频软解器"]
+        VRen --> JNI["libffmpeg_jni.so JNI 桥接"]
         ARen --> JNI
-        JNI --> GL[OpenGL ES 3.0 GPU Shader 渲染引擎 (VAO + GL_R8)]
-        JNI --> SO[prebuilt 预编译 libavcodec / avutil / swresample / swscale / avformat]
+        JNI --> GL["OpenGL ES 3.0 GPU Shader 渲染引擎 (VAO + GL_R8)"]
+        JNI --> SO["prebuilt 预编译动态库 (libavcodec / avutil / swresample / swscale / avformat)"]
     end
 ```
 
 ### 2. Media3 / FFmpeg / OpenGL ES GPU 渲染管线
 
-```text
-URL / 本地视频源
-    │
-    ▼
-┌──────────────────────────────────────────────────────────┐
-│ AndroidX Media3 ExoPlayer（播放与时钟控制引擎）               │
-│  · 解复用（Extractor / MediaSource）                        │
-│  · 轨选择、缓冲控制、精准 seek、倍速、A/V 音画同步时钟        │
-│  · 生命周期管理、错误监听与自动重试策略                      │
-│  · 默认硬件解码：MediaCodecVideoRenderer / MediaCodecAudioRenderer │
-└───────────────┬──────────────────────────┬───────────────┘
-                │ 视频轨（按需或异常降级）        │ 音频轨（按需或异常降级）
-                ▼                            ▼
-┌──────────────────────────┐   ┌──────────────────────────┐
-│ FfmpegVideoRenderer      │   │ FfmpegAudioRenderer      │
-│ （Media3 DecoderVideoRenderer）│ （Media3 DecoderAudioRenderer）│
-└────────────┬─────────────┘   └────────────┬─────────────┘
-             │                              │
-             ▼                              ▼
-┌──────────────────────────────────────────────────────────┐
-│ JNI：libffmpeg_jni.so                                    │
-│  · Native EGL 初始化与 Surface 生命周期管理 (ANativeWindow) │
-│  · 🚀 视频：YUV420P 上传显存 → OpenGL ES 3.0 GPU 着色器矩阵并行转码 │
-│  · 音频：PCM 样本输出 → AudioSink 硬件播放                 │
-└────────────┬─────────────────────────────────────────────┘
-             ▼
-┌──────────────────────────────────────────────────────────┐
-│ FFmpeg C/C++ 动态库（一套 so，LGPL v3.0 合规编译）            │
-│  libavcodec / libavutil / libswscale / libswresample …     │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Source["URL / 本地视频源"] --> Exo["AndroidX Media3 ExoPlayer<br/>(解复用 Extractor / 选轨 / 缓冲 / 音画同步时钟)"]
+    
+    Exo -->|视频轨| VChoice{"解码策略"}
+    Exo -->|音频轨| AChoice{"解码策略"}
+
+    VChoice -->|默认硬件加速| MCVideo["MediaCodecVideoRenderer (系统硬解)"]
+    VChoice -->|异常降级或指定软解| FFVideo["FfmpegVideoRenderer (NDK 软解)"]
+
+    AChoice -->|默认硬件加速| MCAudio["MediaCodecAudioRenderer (系统硬解)"]
+    AChoice -->|异常降级或指定软解| FFAudio["FfmpegAudioRenderer (NDK 软解)"]
+
+    FFVideo --> NativeGL["libffmpeg_jni.so<br/>🚀 OpenGL ES 3.0 GPU Shader 矩阵并行转码 (零 CPU 色彩转换)"]
+    FFAudio --> NativeAudio["libffmpeg_jni.so<br/>PCM 样本直接输出至 AudioSink"]
+
+    NativeGL --> Screen["Surface 画面显示"]
+    NativeAudio --> Speaker["扬声器 / 耳机输出"]
+    MCVideo --> Screen
+    MCAudio --> Speaker
 ```
 
 ---
@@ -79,8 +70,8 @@ URL / 本地视频源
 
 | 业务板块 | 核心特性 | 技术亮点 |
 | :--- | :--- | :--- |
-| **竖滑 Feed (`feed`)** | 0ms 闪电起播 · 真正垂直沉降 | 🚀 **双向预加载队列 (Bidirectional Preload)**<br>🎞️ **抖音级微型拖拽进度条 (`FeedMicroProgressBar`)**<br>💡 **两阶段加载视觉**（首帧前 Cover 渐隐 + 播放中底部呼吸微光线）<br>⚡ **`settledPage` 防抖起播**，杜绝滑动手势掉帧 |
-| **沉浸点播 VOD (`vod`)** | **7 大工业级体验全家桶** | ⚡ **长按 2X 极速快进**（带高保真微光 HUD）<br>🔒 **悬浮屏幕防误触锁**<br>⏱️ **记忆播放 / 断点自动续播 (`VodProgressStore`)**<br>🎞️ **进度条拖动时间气泡预览 (`PremiumBufferSlider`)**<br>🎚️ **多清晰度无缝平滑切档** (1080P/720P/480P)<br>💬 **影视级外挂双语字幕 / CC**<br>🚀 **60fps Canvas 高性能防重叠滚动弹幕**<br>📱 **系统级画中画 (Picture-in-Picture)** 支持后台持续播放 |
+| **竖滑 Feed (`feed`)** | 0ms 闪电起播 · 真正垂直沉降 | 🚀 **双向预加载队列 (Bidirectional Preload)**<br/>🎞️ **抖音级微型拖拽进度条 (`FeedMicroProgressBar`)**<br/>💡 **两阶段加载视觉**（首帧前 Cover 渐隐 + 播放中底部呼吸微光线）<br/>⚡ **`settledPage` 防抖起播**，杜绝滑动手势掉帧 |
+| **沉浸点播 VOD (`vod`)** | **7 大工业级体验全家桶** | ⚡ **长按 2X 极速快进**（带高保真微光 HUD）<br/>🔒 **悬浮屏幕防误触锁**<br/>⏱️ **记忆播放 / 断点自动续播 (`VodProgressStore`)**<br/>🎞️ **进度条拖动时间气泡预览 (`PremiumBufferSlider`)**<br/>🎚️ **多清晰度无缝平滑切档** (1080P/720P/480P)<br/>💬 **影视级外挂双语字幕 / CC**<br/>🚀 **60fps Canvas 高性能防重叠滚动弹幕**<br/>📱 **系统级画中画 (Picture-in-Picture)** 支持后台持续播放 |
 | **剪辑调参 Clip (`clip`)** | 视频裁剪与调参引擎 | `ClipEngine` + 裁剪参数管理与转码 |
 | **软解扩展 (`video-ffmpeg`)** | **OpenGL ES 3.0 GPU 加速软解** | Native EGL + GLSL 3.00 ES + VAO 硬件渲染，**CPU 占用骤降 500%、零偏色、零花屏**；硬解优先，软解兜底 |
 | **高可用防护** | 工业级生命周期与网络容灾 | `ExoTimeoutException` 致命主线程阻塞彻底防御、网络异常自动重试与镜像切换 |
@@ -118,7 +109,7 @@ dependencies {
 }
 ```
 
-> **提示**：版本号 `1.0.0` 可替换为顶部 JitPack 徽章显示的最新 Release Tag 或 `master-SNAPSHOT`。
+> **提示**：版本号 `1.0.0` 可替换为最新 Release Tag 或 `master-SNAPSHOT`。
 
 ### 3. 系统权限声明 (AndroidManifest.xml)
 在宿主 App 的 `AndroidManifest.xml` 中确保声明了网络权限：
