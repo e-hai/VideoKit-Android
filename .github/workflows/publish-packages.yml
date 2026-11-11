@@ -1,0 +1,68 @@
+name: Publish to GitHub Packages
+
+on:
+  push:
+    tags:
+      - "[0-9].*"
+      - "v[0-9].*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Publish version (e.g. 1.0.1). Leave empty to use gradle.properties VERSION_NAME."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve publish version
+        id: resolve
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            RAW_VER="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            RAW_VER="${{ github.ref_name }}"
+          else
+            RAW_VER="$(grep -E '^VERSION_NAME=' gradle.properties | cut -d'=' -f2 | tr -d '[:space:]')"
+          fi
+          CLEAN_VER="${RAW_VER#v}"
+          CLEAN_VER="${CLEAN_VER#V}"
+          echo "version=$CLEAN_VER" >> "$GITHUB_OUTPUT"
+          echo "Resolved GitHub Packages version: $CLEAN_VER"
+
+      - name: Publish :video and :video-ffmpeg to GitHub Packages
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: >
+          ./gradlew
+          :video:publishReleasePublicationToGitHubPackagesRepository
+          :video-ffmpeg:publishReleasePublicationToGitHubPackagesRepository
+          -PVERSION_NAME="${{ steps.resolve.outputs.version }}"
+          --no-daemon
+          --stacktrace

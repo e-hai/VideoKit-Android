@@ -1,0 +1,53 @@
+name: Android CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build all modules (video, video-ffmpeg, sample)
+        run: ./gradlew :video:assembleDebug :video-ffmpeg:assembleDebug :sample:assembleDebug --no-daemon --stacktrace
+
+      - name: Verify release Maven publication locally
+        run: >
+          ./gradlew :video:publishReleasePublicationToMavenLocal
+          :video-ffmpeg:publishReleasePublicationToMavenLocal
+          -PVERSION_NAME=0.0.0-ci
+          --no-daemon --stacktrace
+
+      - name: Verify published AAR and POM artifacts
+        run: |
+          BASE="$HOME/.m2/repository/com/github/e-hai"
+          for artifact in video video-ffmpeg; do
+            test -f "$BASE/$artifact/0.0.0-ci/$artifact-0.0.0-ci.aar" || (echo "Missing $artifact AAR" && exit 1)
+            test -f "$BASE/$artifact/0.0.0-ci/$artifact-0.0.0-ci.pom" || (echo "Missing $artifact POM" && exit 1)
+            test -f "$BASE/$artifact/0.0.0-ci/$artifact-0.0.0-ci-sources.jar" || (echo "Missing $artifact sources JAR" && exit 1)
+          done
+          echo "All GitHub Packages artifacts verified."

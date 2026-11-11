@@ -1,8 +1,0 @@
-jdk:
-  - openjdk17
-
-before_install:
-  - ./gradlew --version
-
-install:
-  - ./gradlew :video:publishReleasePublicationToMavenLocal :video-ffmpeg:publishReleasePublicationToMavenLocal

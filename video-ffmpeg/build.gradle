@@ -1,7 +1,12 @@
 plugins {
     alias(libs.plugins.android.library)
-    id 'maven-publish'
 }
+
+ext {
+    pomDescription = "VideoKit-Android FFmpeg software decoder extension with OpenGL ES 3.0 GPU shader rendering."
+}
+
+apply from: rootProject.file("gradle/github-packages-publish.gradle")
 
 android {
     namespace 'com.kit.video.ffmpeg'
@@ -51,27 +56,14 @@ android {
     }
 }
 
-afterEvaluate {
-    publishing {
-        publications {
-            release(MavenPublication) {
-                from components.release
-                groupId = 'com.github.e-hai.VideoKit-Android'
-                artifactId = 'video-ffmpeg'
-                version = project.version != 'unspecified' ? project.version : '1.0.0'
-            }
-        }
-    }
-}
-
 dependencies {
     implementation(libs.androidx.core.ktx)
 
-    // Media3 依赖
-    implementation(libs.androidx.media3.exoplayer)
+    // Media3 依赖（对外暴露 Renderer / Factory 基类，声明为 api）
+    api(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui.lib)
-    implementation(libs.androidx.media3.common)
-    implementation(libs.androidx.media3.decoder)
+    api(libs.androidx.media3.common)
+    api(libs.androidx.media3.decoder)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

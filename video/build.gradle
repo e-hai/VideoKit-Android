@@ -1,8 +1,13 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
-    id 'maven-publish'
 }
+
+ext {
+    pomDescription = "VideoKit-Android core SDK: Feed, VOD, Clip, and 1GB LRU cache."
+}
+
+apply from: rootProject.file("gradle/github-packages-publish.gradle")
 
 android {
     namespace 'com.kit.video'
@@ -38,32 +43,19 @@ android {
     }
 }
 
-afterEvaluate {
-    publishing {
-        publications {
-            release(MavenPublication) {
-                from components.release
-                groupId = 'com.github.e-hai.VideoKit-Android'
-                artifactId = 'video'
-                version = project.version != 'unspecified' ? project.version : '1.0.0'
-            }
-        }
-    }
-}
-
 dependencies {
     implementation libs.androidx.core.ktx
     implementation libs.androidx.recyclerview
     implementation libs.androidx.paging.runtime.ktx
 
-    // 使用 ExoPlayer 进行媒体播放
-    implementation libs.androidx.media3.exoplayer
+    // 使用 ExoPlayer 进行媒体播放（对宿主暴露核心播放类型，声明为 api）
+    api libs.androidx.media3.exoplayer
     implementation libs.androidx.media3.exoplayer.hls
     implementation libs.androidx.media3.exoplayer.dash
     // 使用 OkHttp 网络栈加载数据
     implementation libs.androidx.media3.datasource.okhttp
     // 构建媒体播放界面
-    implementation libs.androidx.media3.ui.lib
+    api libs.androidx.media3.ui.lib
     // 暴露和控制媒体会话
     implementation libs.androidx.media3.session
     // 从媒体容器中提取数据
@@ -81,13 +73,13 @@ dependencies {
     // 媒体解码器的通用功能
     implementation libs.androidx.media3.decoder
     // 加载数据的通用功能
-    implementation libs.androidx.media3.datasource
+    api libs.androidx.media3.datasource
     // 多个媒体库中通用的功能
-    implementation libs.androidx.media3.common
+    api libs.androidx.media3.common
     
     // Compose dependencies
-    implementation platform(libs.androidx.compose.bom)
-    implementation libs.androidx.compose.ui
+    api platform(libs.androidx.compose.bom)
+    api libs.androidx.compose.ui
     implementation libs.androidx.compose.ui.graphics
     implementation libs.androidx.compose.ui.tooling.preview
     implementation libs.androidx.compose.material3

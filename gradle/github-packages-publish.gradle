@@ -1,0 +1,77 @@
+/**
+ * Shared Maven publishing for Android library modules (GitHub Packages / MavenLocal).
+ *
+ * Prerequisites in the module's android {} block:
+ *   publishing {
+ *       singleVariant("release") {
+ *           withSourcesJar()
+ *       }
+ *   }
+ *
+ * Coordinates: com.github.e-hai:<module>:<version>
+ */
+apply plugin: 'maven-publish'
+
+def resolvePublishVersion = {
+    def fromEnv = providers.environmentVariable("VERSION").orNull
+    def fromProp = providers.gradleProperty("VERSION_NAME").orNull
+    def raw = (fromEnv != null && !fromEnv.trim().isEmpty()) ? fromEnv.trim() : (fromProp ?: "1.0.1")
+    return raw.replaceFirst(/^refs\/tags\//, "").replaceFirst(/^[vV]/, "")
+}
+
+group = providers.gradleProperty("GROUP_ID").orNull ?: "com.github.e-hai"
+version = resolvePublishVersion()
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                from components.release
+                groupId = project.group.toString()
+                artifactId = project.name
+                version = project.version.toString()
+
+                pom {
+                    name.set("VideoKit-Android (${project.name})")
+                    description.set(
+                        project.hasProperty("pomDescription")
+                            ? project.property("pomDescription").toString()
+                            : "VideoKit-Android library module: ${project.name}"
+                    )
+                    url.set("https://github.com/e-hai/VideoKit-Android")
+                    licenses {
+                        license {
+                            name.set("The Apache License, Version 2.0")
+                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    developers {
+                        developer {
+                            id.set("e-hai")
+                            name.set("e-hai")
+                        }
+                    }
+                    scm {
+                        connection.set("scm:git:git://github.com/e-hai/VideoKit-Android.git")
+                        developerConnection.set("scm:git:ssh://git@github.com:e-hai/VideoKit-Android.git")
+                        url.set("https://github.com/e-hai/VideoKit-Android")
+                    }
+                }
+            }
+        }
+
+        repositories {
+            maven {
+                name = "GitHubPackages"
+                // GitHub Packages requires the repository owner segment to be lowercase
+                url = uri("https://maven.pkg.github.com/e-hai/VideoKit-Android")
+                credentials {
+                    username = providers.gradleProperty("gpr.user").orNull
+                        ?: providers.environmentVariable("GITHUB_ACTOR").orNull
+                    password = providers.gradleProperty("gpr.key").orNull
+                        ?: providers.environmentVariable("GITHUB_TOKEN").orNull
+                }
+            }
+        }
+    }
+}

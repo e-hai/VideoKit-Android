@@ -10,15 +10,17 @@
 
 ```
 VideoKit-Android/
+├── .github/workflows/     # GitHub Actions (ci.yml 构建校验 + publish-packages.yml 自动发包)
+├── gradle/                # github-packages-publish.gradle 通用 GitHub Packages / MavenLocal 发布脚本
 ├── sample/                # Single-Activity (MainActivity) + Compose 多路由 App 示例模块
-├── video/                 # VideoKit Core SDK 核心库 (发布物: com.github.e-hai.VideoKit-Android:video)
+├── video/                 # VideoKit Core SDK 核心库 (GitHub Packages: com.github.e-hai:video)
 │   └── com.kit.video/
 │       ├── feed/          # 竖滑信息流 Feed（Cover / Preload / Breathing Line / Pager Settlement / MicroProgressBar）
 │       ├── vod/           # 沉浸点播 VOD（Overlay / Gestures / Speed / PiP / Danmaku / Subtitles / Quality / Resume / Lock）
 │       ├── clip/          # 剪辑调参 Clip（ClipEngine / ClipParams / Timeline）
 │       ├── cache/         # 1GB LRU 磁盘缓存池与双向预拉取 (VideoCacheManager)
 │       └── ui/            # 高阶播放控件 (PremiumBufferSlider 等)
-└── video-ffmpeg/          # 【独立软解扩展库】(发布物: com.github.e-hai.VideoKit-Android:video-ffmpeg)
+└── video-ffmpeg/          # 【独立软解扩展库】(GitHub Packages: com.github.e-hai:video-ffmpeg)
     ├── src/main/cpp/      # FFmpeg C/C++ NDK JNI + OpenGL ES 3.0 GPU 着色器软解渲染器 (libffmpeg_jni.so)
     └── src/main/java/     # FfmpegRenderersFactory / FfmpegVideoRenderer / FfmpegAudioRenderer
 ```
@@ -70,15 +72,29 @@ VideoKit-Android/
 
 ---
 
-## 3. 依赖分发与构建指令 (Build & Release)
+## 3. GitHub Packages 分发规范与构建指令 (Build & Release)
+
+### 3.1 制品坐标与鉴权约束
+- **制品仓库**：`https://maven.pkg.github.com/e-hai/VideoKit-Android`（仓库 Owner 必须保持全小写 `e-hai`）
+- **核心坐标**：`com.github.e-hai:video:<version>` 与 `com.github.e-hai:video-ffmpeg:<version>`（当前默认版本见 `gradle.properties` 中 `VERSION_NAME`）
+- **宿主鉴权规范**：辅助第三方宿主接入时，务必提醒在 `settings.gradle(.kts)` 中配置 `credentials`（优先读取 `gpr.user` / `gpr.key` Gradle 属性或 `GITHUB_ACTOR` / `GITHUB_TOKEN` 环境变量，严禁将 PAT 硬编码进代码仓库；Token 仅需 `read:packages` 权限）。
+- **不可覆盖约束**：GitHub Packages 禁止同版本号重复覆盖上传（再次推送相同版本号会返回 `422 Conflict`），每次发版必须先递增 `gradle.properties` 中的 `VERSION_NAME` 再推送对应 Git Tag。
+
+### 3.2 构建与发布命令
 
 ```bash
 # 全量编译构建 (包含 sample, video, video-ffmpeg 全部模块)
 ./gradlew assembleDebug
 
-# 本地 Maven 发布验证
+# 本地 Maven 发布验证 (~/.m2/repository/com/github/e-hai/)
 ./gradlew :video:publishReleasePublicationToMavenLocal :video-ffmpeg:publishReleasePublicationToMavenLocal
+
+# 手动发布到 GitHub Packages (需配置 gpr.user/gpr.key 或 GITHUB_ACTOR/GITHUB_TOKEN)
+./gradlew :video:publishReleasePublicationToGitHubPackagesRepository :video-ffmpeg:publishReleasePublicationToGitHubPackagesRepository
 
 # 增量清理构建
 ./gradlew clean assembleDebug
 ```
+
+### 3.3 GitHub Actions 自动发包
+- 推送语义化版本 Tag（如 `1.0.1` 或 `v1.0.1`）或通过 GitHub Actions `Publish to GitHub Packages` 手动触发 `workflow_dispatch`，自动使用内置 `GITHUB_TOKEN` (`packages: write`) 发布两个 AAR 模块及 `sources.jar` / `pom` 元数据。
